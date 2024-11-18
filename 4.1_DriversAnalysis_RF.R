@@ -9,16 +9,10 @@ setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod")
 
 library(tidyverse)
 library(corrplot)
-library(mgcv)
-library(voxel)
 library(randomForest)
 library(splitstackshape)
-library(caret)
-library(dplyr)
-library(emmeans)
-library(MetBrewer)
 library(ggplot2)
-library(caret)
+
 
 # Load data
 load("./Climate/Rec_pdsi_summary.RDATA")
@@ -51,7 +45,7 @@ driver.analysis <- pdsi.total.summary.FH.maxThreshold %>% filter(Threshold != 40
          TotalFires = TotalFires %>%  as.numeric,
          freq.index =  cut(TotalFires, breaks = c(0, 4, 6, 11), labels=c("<4", "4-6",">6" )) %>% as.factor,
          Threshold = Threshold %>% as.factor %>% droplevels,
-         rec.status = recode_factor( Threshold, '50'="<80%", '60'="<80%",'70'="<80%",'80'="<80%",'90'=">80%",'100'=">80%")) %>% na.omit 
+         rec.status = recode_factor( Threshold, '50'="<80%", '60'="<80%",'70'="<80%",'80'="<80%",'90'=">80%",'100'=">80%")) %>% na.omit %>% distinct 
 
 driver.analysis$Threshold %>% levels
 
@@ -61,18 +55,24 @@ setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript")
 save(driver.analysis, file="DriversData.RDATA")
 
 # Train and Test data
-train <- stratified(pdsi.total.summary.FH.maxThreshold.noNA, c("Obs_Mo", "FireYear", "Severity", "PostDateDif", 
-                                                               "pdsi.index",
-                                                               "freq.index",
-                                                               "model.NDVI", "PreNDVI", "Threshold"), .6)
-test <- anti_join(driver.analysis, train)
 
+train <- stratified(driver.analysis, c("Severity","PostDateDif",
+                                       "pdsi.index","freq.index",
+                                       "model.NDVI", "PreNDVI", "Threshold"), 0.5)
+
+train <- driver.analysis %>%
+  sample_frac(0.5) 
+
+test <- anti_join(driver.analysis, train, by= 'ptID')
+
+
+driver.analysis %>% summary
+train  %>% summary
+test  %>% summary
 
 # Correlation Matrix
-train  %>% summary
-names(train )
-
-sum.MT <- pdsi.total.summary.FH.maxThreshold[, c(3:10, 13, 16:18,21,23, 25, 26, 27)] %>% na.omit()
+train %>% names
+sum.MT <- train[, c(3:6, 8:10,16:21,23, 25:27)] %>% na.omit()
 summary( sum.MT)
 M <- cor(sum.MT)
 corrplot::corrplot(M, method="circle")
@@ -82,43 +82,67 @@ corrplot::corrplot(M, method="circle")
 #############################################################################################################################
 # RANDOM FOREST......................................................................................................... 
 
+# We need models of recovery threshold reached and recovery time to maximum threshold:
 
-# Indicies RF
-threshold_rf_index <- randomForest( Threshold ~   PreNDVI + freq.index +
-                                                  pdsi.index + TotalFires + 
-                                      hist.Int + nwet.frac+
-                                      ndry.frac,
-                                                data= driver.analysis,
-                                                importance=TRUE,
-                                                predicted=TRUE,
-                                                keep.inbag=TRUE)
+# We focus on the the difference between >80 % and lessthan 80% maximum threshold reached.
 
-threshold_rf_index
+# Variable Selection:
+library(VSURF)
+library(parallel)
 
-varImpPlot(threshold_rf_index)
-p1 <- predict(threshold_rf_index, train)
-confusionMatrix(p1, train$Threshold)
-# try to just predict above or below 80
-# include confusion matrix results in manuscript
 
-system.time(t80_rf_index <- randomForest( rec.status ~  
-                                            PreNDVI + freq.index +
-                                            pdsi.index + TotalFires + 
-                                            hist.Int + nwet.frac+
-                                            ndry.frac,
-                                          data= driver.analysis,
-                                                 importance=TRUE,
-                                                 predicted=TRUE,
-                                                 keep.inbag=TRUE)) 
-t80_rf_index 
-varImpPlot(t80_rf_index)
-p1 <- predict(t80_rf_index, train)
-confusionMatrix(p1, train$rec.status)
 
-# save model 
+T80_rf_index.vsurf <- VSURF(train[, c(3:6, 8:9, 14:19, 25, 35)], train[, 36], ntree = 500,
+                       RFimplem = "randomForest", 
+                       clusterType = "PSOCK", 
+                       verbose = TRUE,
+                       ncores = detectCores() - 2, parallel= TRUE)
+
+T80_rf_index.vars <-names( train[, c(3:6, 8:9, 14:19, 25, 35)]) [T80_rf_index.vsurf$varselect.pred] 
+
+T80_rf_index <- randomForest( rec.status ~ .,
+                              data= train %>% select( c('rec.status', T80_rf_index.vars) ),
+                              importance=TRUE,
+                              predicted=TRUE,
+                              keep.inbag=TRUE)
+
+T80_rf_index 
+
+varImpPlot(T80_rf_index)
+
+train$T80_rf_index <- predict(T80_rf_index , train)
+confusionMatrix(train$T80_rf_index, train$rec.status )
+
+# Save Model 
 setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript")
-save(threshold_rf_index, t80_rf_index, train, test, pdsi.total.summary.FH.maxThreshold.noNA, file="RF_threshold_index.RDATA")
+save(T80_rf_index, test, train,T80_rf_index.vars , file="RF_threshold_index.RDATA")
 
+# Recovery Time model: ####
+Rc_Yrs_rf_index.vsurf <- VSURF(train[, c(3:6, 8:9, 14:19, 25, 35)], train[, 23], ntree = 500,
+                            RFimplem = "randomForest", 
+                            clusterType = "PSOCK", 
+                            verbose = TRUE,
+                            ncores = detectCores() - 2, parallel= TRUE)
+
+Rc_Yrs_rf_index.vars <-names( train[, c(3:6, 8:9, 14:19, 25, 35)]) [Rc_Yrs_rf_index.vsurf$varselect.pred]
+
+
+Rc_Yrs_rf_index <- randomForest( Rec_Yrs ~ .,
+                              data= train %>% select( c('Rec_Yrs', T80_rf_index.vars) ),
+                              importance=TRUE,
+                              predicted=TRUE,
+                              keep.inbag=TRUE)
+
+Rc_Yrs_rf_index 
+
+varImpPlot(Rc_Yrs_rf_index)
+
+train$Rc_Yrs_rf_index <- predict(Rc_Yrs_rf_index , train)
+confusionMatrix(train$Rc_Yrs_rf_index, train$Rec_Yrs )
+
+# Save Model 
+setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript")
+save(Rc_Yrs_rf_index, test, train,Rc_Yrs_rf_index.vars , file="RF_Rec_Yrs_index.RDATA")
 
 # Sensitivity Analysis.............................................................................................................
 

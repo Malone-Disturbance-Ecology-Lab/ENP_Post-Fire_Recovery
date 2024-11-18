@@ -1,5 +1,8 @@
 # ENP_Post-Fire_Recovery
 
+Manuscript: https://docs.google.com/document/d/1xc3C3NvPZfimW4Fq75SLrIRXcYYqTeNaYd2Cx0WOb0k/edit?usp=sharing
+
+
 Naming convention for scripts: PRODUCT_Description_Author.R
 
 	•	Figure_BaselineModel_SLM – Creates model results figures for the baseline model
