@@ -1,5 +1,5 @@
 # DRIVERS ANALYSIS
-# SPARKLE MALONE, GRACE McLEOD, 2024
+# SPARKLE MALONE, 2024
 
 # This script evaluates the influence of fire history and climate 
 # on recovery threshold and recovery time. 
@@ -49,7 +49,7 @@ driver.analysis <- pdsi.total.summary.FH.maxThreshold %>% filter(Threshold != 40
 
 driver.analysis$Threshold %>% levels
 
-
+driver.analysis$FireType[driver.analysis$FireType == 'Rx'] <- "RX"
 
 setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript")
 save(driver.analysis, file="DriversData.RDATA")
@@ -91,14 +91,15 @@ library(VSURF)
 library(parallel)
 
 
+train[, c(3:6, 8:9, 15:19, 25, 35)] %>% names()
 
-T80_rf_index.vsurf <- VSURF(train[, c(3:6, 8:9, 14:19, 25, 35)], train[, 36], ntree = 500,
+T80_rf_index.vsurf <- VSURF(train[, c(3:6, 8:9, 15:19, 25, 35)], train[, 36], ntree = 500,
                        RFimplem = "randomForest", 
                        clusterType = "PSOCK", 
                        verbose = TRUE,
                        ncores = detectCores() - 2, parallel= TRUE)
 
-T80_rf_index.vars <-names( train[, c(3:6, 8:9, 14:19, 25, 35)]) [T80_rf_index.vsurf$varselect.pred] 
+T80_rf_index.vars <-names( train[, c(3:6, 8:9, 15:19, 25, 35)]) [T80_rf_index.vsurf$varselect.pred] 
 
 T80_rf_index <- randomForest( rec.status ~ .,
                               data= train %>% select( c('rec.status', T80_rf_index.vars) ),
@@ -118,17 +119,18 @@ setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript")
 save(T80_rf_index, test, train,T80_rf_index.vars , file="RF_threshold_index.RDATA")
 
 # Recovery Time model: ####
-Rc_Yrs_rf_index.vsurf <- VSURF(train[, c(3:6, 8:9, 14:19, 25, 35)], train[, 23], ntree = 500,
+train %>% names()
+Rc_Yrs_rf_index.vsurf <- VSURF(train[, c(3:6, 8:9, 15:19, 25, 35)], train[, 23], ntree = 500,
                             RFimplem = "randomForest", 
                             clusterType = "PSOCK", 
                             verbose = TRUE,
                             ncores = detectCores() - 2, parallel= TRUE)
 
-Rc_Yrs_rf_index.vars <-names( train[, c(3:6, 8:9, 14:19, 25, 35)]) [Rc_Yrs_rf_index.vsurf$varselect.pred]
+Rc_Yrs_rf_index.vars <-names( train[, c(3:6, 8:9, 15:19, 25, 35)]) [Rc_Yrs_rf_index.vsurf$varselect.pred]
 
 
 Rc_Yrs_rf_index <- randomForest( Rec_Yrs ~ .,
-                              data= train %>% select( c('Rec_Yrs', T80_rf_index.vars) ),
+                              data= train %>% select(all_of(c('Rec_Yrs', Rc_Yrs_rf_index.vars) )),
                               importance=TRUE,
                               predicted=TRUE,
                               keep.inbag=TRUE)
@@ -138,316 +140,184 @@ Rc_Yrs_rf_index
 varImpPlot(Rc_Yrs_rf_index)
 
 train$Rc_Yrs_rf_index <- predict(Rc_Yrs_rf_index , train)
-confusionMatrix(train$Rc_Yrs_rf_index, train$Rec_Yrs )
+test$Rc_Yrs_rf_index <- predict(Rc_Yrs_rf_index , test)
+
+lm( train$Rec_Yrs ~ train$Rc_Yrs_rf_index) %>% summary
+lm( test$Rec_Yrs ~ test$Rc_Yrs_rf_index) %>% summary
 
 # Save Model 
 setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript")
 save(Rc_Yrs_rf_index, test, train,Rc_Yrs_rf_index.vars , file="RF_Rec_Yrs_index.RDATA")
 
-# Sensitivity Analysis.............................................................................................................
+# Data Visualization ####
+load("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript/DriversData.RDATA")
+load("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript/RF_threshold_index.RDATA")
+load("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript/RF_Rec_Yrs_index.RDATA")
 
-# calculate mean for each index and adjust severity and PreNDVI values
-mean(pdsi.total.summary.FH.maxThreshold$Severity[pdsi.total.summary.FH.maxThreshold$freq.index == "<4"], na.rm=T) # 0.1044326
-mean(pdsi.total.summary.FH.maxThreshold$Severity[pdsi.total.summary.FH.maxThreshold$freq.index == "4-6"], na.rm=T) #  0.1007905
-mean(pdsi.total.summary.FH.maxThreshold$Severity[pdsi.total.summary.FH.maxThreshold$freq.index == ">6"], na.rm=T) # 0.1066974
+library(ggplot2)
+library(tidyverse)
+library(randomForest)
 
-# make a synthetic dataframe 
-sensitivity <- rbind(data.frame(Severity= 0.1044326, PreNDVI= seq(0.04, 0.4, 0.01), freq.index="<4", pdsi.index = "dry"), 
-                                data.frame(Severity= 0.1007905, PreNDVI= seq(0.04, 0.4, 0.01), freq.index="4-6", pdsi.index = "dry"),
-                                data.frame(Severity= 0.1066974, PreNDVI= seq(0.04, 0.4, 0.01), freq.index=">6", pdsi.index = "dry"),
-                     data.frame(Severity= 0.1044326, PreNDVI= seq(0.04, 0.4, 0.01), freq.index="<4", pdsi.index = "normal"), 
-                     data.frame(Severity= 0.1007905, PreNDVI= seq(0.04, 0.4, 0.01), freq.index="4-6", pdsi.index = "normal"),
-                     data.frame(Severity= 0.1066974, PreNDVI= seq(0.04, 0.4, 0.01), freq.index=">6", pdsi.index = "normal"),
-                     data.frame(Severity= 0.1044326, PreNDVI= seq(0.04, 0.4, 0.01), freq.index="<4", pdsi.index = "wet"), 
-                     data.frame(Severity= 0.1007905, PreNDVI= seq(0.04, 0.4, 0.01), freq.index="4-6", pdsi.index = "wet"),
-                     data.frame(Severity= 0.1066974, PreNDVI= seq(0.04, 0.4, 0.01), freq.index=">6", pdsi.index = "wet")) 
-sensitivity$PostDateDif <- 600
-sensitivity$freq.index <- as.factor(sensitivity$freq.index)
-sensitivity$pdsi.index <- as.factor(sensitivity$pdsi.index)
-# project model into dataframe
-sensitivity$threshold.predict <- predict(threshold_rf_index, sensitivity)
-sensitivity$threshold.predict80 <- predict(t80_rf_index, sensitivity)
+#MODELS:
+Rc_Yrs_rf_index.vars 
+T80_rf_index
+
+# Sensitivity Analysis......................................................####
+
+sensitivity.mean <- driver.analysis %>% summarise(
+  pdsi.sd = mean(pdsi.sd, na.rm=T),
+  pdsi.max = mean(pdsi.max , na.rm=T), 
+  pdsi.min = mean(pdsi.min , na.rm=T), 
+  pdsi.mean = mean(pdsi.mean , na.rm=T))
+
+sensitivity.mean.group <- driver.analysis %>% group_by(FireType, freq.index)  %>% summarise(
+  pdsi.sd = mean(pdsi.sd, na.rm=T),
+  pdsi.max = mean(pdsi.max , na.rm=T), 
+  pdsi.min = mean(pdsi.min , na.rm=T), 
+  pdsi.mean = mean(pdsi.mean , na.rm=T),
+  TotalFires = mean(TotalFires , na.rm=T),
+  PreNDVI = mean(PreNDVI, na.rm=T))
+
+summary.var <- function( var){
+  var.df = data.frame( var =seq(min(var), max(var), ((max(var)- min(var))/10))) %>% as.data.frame()
+   return(var.df)
+}
+summary.df <- function( mean.conditions, target.var, df){
+  
+  target.var.df = df %>% select(target.var) %>% summary.var() %>% mutate(target.var = var ) %>% select(target.var)
+  summary.df <- mean.conditions %>% select(-c(target.var)) %>%  cross_join(target.var.df)
+  return(summary.df)
+}
+                     
+sensitivity.mean.pdsi.sd <- summary.df(mean.conditions= sensitivity.mean, 
+                                              target.var = 'pdsi.sd', df=driver.analysis ) %>% mutate(pdsi.sd=target.var ,
+                                                                                                      target.var = 'pdsi.sd') 
+
+sensitivity.mean.pdsi.max <- summary.df(mean.conditions= sensitivity.mean, 
+                                              target.var = 'pdsi.max', df=driver.analysis ) %>% mutate(pdsi.max=target.var ,
+                                                                                                       target.var = 'pdsi.max') 
+
+sensitivity.mean.pdsi.mean <- summary.df(mean.conditions= sensitivity.mean, 
+                                              target.var = 'pdsi.mean', df=driver.analysis )%>% mutate(pdsi.mean=target.var ,
+                                                                                                       target.var = 'pdsi.mean') 
+
+sensitivity.mean.pdsi.min <- summary.df(mean.conditions= sensitivity.mean, 
+                                              target.var = 'pdsi.min', df=driver.analysis ) %>% mutate(pdsi.min=target.var,
+                                                                                                       target.var = 'pdsi.min') 
+
+
+sensitivity.Rc_Yrs_rf_index <- rbind( sensitivity.mean.pdsi.sd,
+                                           sensitivity.mean.pdsi.max,
+                                           sensitivity.mean.pdsi.mean, 
+                                           sensitivity.mean.pdsi.min)
+
+sensitivity.Rc_Yrs_rf_index$Rc_Yrs_rf_index <-  predict(Rc_Yrs_rf_index ,sensitivity.Rc_Yrs_rf_index)
+
+rm(sensitivity.mean.pdsi.sd,
+     sensitivity.mean.pdsi.max,
+     sensitivity.mean.pdsi.mean, 
+     sensitivity.mean.pdsi.min)
+
+sensitivity.mean.group.pdsi.sd <- summary.df(mean.conditions= sensitivity.mean.group, 
+                                       target.var = 'pdsi.sd', df=driver.analysis ) %>% mutate(pdsi.sd=target.var ,
+                                                                                               target.var = 'pdsi.sd') 
+
+sensitivity.mean.group.pdsi.max <- summary.df(mean.conditions= sensitivity.mean.group, 
+                                        target.var = 'pdsi.max', df=driver.analysis ) %>% mutate(pdsi.max=target.var ,
+                                                                                                 target.var = 'pdsi.max') 
+
+sensitivity.mean.group.pdsi.mean <- summary.df(mean.conditions= sensitivity.mean.group, 
+                                         target.var = 'pdsi.mean', df=driver.analysis )%>% mutate(pdsi.mean=target.var ,
+                                                                                                  target.var = 'pdsi.mean') 
+
+sensitivity.mean.group.pdsi.min <- summary.df(mean.conditions= sensitivity.mean.group, 
+                                        target.var = 'pdsi.min', df=driver.analysis ) %>% mutate(pdsi.min=target.var,
+                                                                                                 target.var = 'pdsi.min')
+
+sensitivity.mean.group.TotalFires <- summary.df(mean.conditions= sensitivity.mean.group, 
+                                              target.var = 'TotalFires', df=driver.analysis ) %>% mutate(TotalFires=target.var,
+                                                                                                       target.var = 'TotalFires')
+
+
+sensitivity.mean.group.PreNDVI <- summary.df(mean.conditions= sensitivity.mean.group, 
+                                               target.var = 'PreNDVI', df=driver.analysis ) %>% mutate(PreNDVI=target.var,
+                                                                                                        target.var = 'PreNDVI')
+
+sensitivity.T80_rf_index <- rbind( sensitivity.mean.group.pdsi.sd,
+                                      sensitivity.mean.group.pdsi.max,
+                                      sensitivity.mean.group.pdsi.mean, 
+                                      sensitivity.mean.group.pdsi.min,
+                                   sensitivity.mean.group.TotalFires,
+                                   sensitivity.mean.group.PreNDVI )
+
+sensitivity.T80_rf_index$T80_rf_index <-  predict(T80_rf_index ,sensitivity.T80_rf_index)
+
+rm( sensitivity.mean.group.pdsi.sd,
+         sensitivity.mean.group.pdsi.max,
+         sensitivity.mean.group.pdsi.mean, 
+         sensitivity.mean.group.pdsi.min,
+         sensitivity.mean.group.TotalFires,
+         sensitivity.mean.group.PreNDVI )
+
+
+
+
+library(randomForest)
 # save
 setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript")
-save(sensitivity, file="Sensitivity_data.RDATA")
+save(sensitivity.T80_rf_index, sensitivity.Rc_Yrs_rf_index,
+     file="Sensitivity_data.RDATA")
 
-# plot
-sensitivity$freq.index <- factor(sensitivity$freq.index, levels=  c("<4", "4-6", ">6"))
-ggplot(sensitivity) +
-  geom_line(aes(y=PreNDVI, x=threshold.predict, col=pdsi.index), position= position_dodge(0.8), alpha= 0.5 , size=5) +
-  facet_wrap(~freq.index) +
-  theme_bw()
+# Plots for Rc_Yrs_rf_index:
 
-# compare training to testing
-test$threshold.predict <- predict(threshold_rf_index, test)
-# see corrilation for prediction
-summary(lm(test$NDVI ~ test$threshold.predict))       # R2= 0.6447  
+plot.Rc_Yrs_rf_inde.pdsi.max <-  sensitivity.Rc_Yrs_rf_index %>% filter(target.var == 'pdsi.max') %>%  ggplot(aes(x = pdsi.max, y =Rc_Yrs_rf_index)) + geom_point(color= '#6f948c', alpha=0.5) +  geom_smooth( color= '#6f948c') + theme_bw() + ylab("Recovery (Years)")
 
+plot.Rc_Yrs_rf_inde.pdsi.mean <- sensitivity.Rc_Yrs_rf_index %>% filter(target.var == 'pdsi.mean') %>%  ggplot(aes(x = pdsi.mean, y =Rc_Yrs_rf_index)) + geom_point(color= '#6f948c', alpha=0.5) +  geom_smooth( color= '#6f948c') + theme_bw()+ ylab("Recovery (Years)")
 
-# find high, med, and lows based on mean
-summary(pdsi.total.summary.FH.maxThreshold$pdsi.mean) 
-mean(pdsi.total.summary.FH.maxThreshold$pdsi.min[pdsi.total.summary.FH.maxThreshold$pdsi.mean < -3], na.rm=T) # -3.5 min
-mean(pdsi.total.summary.FH.maxThreshold$pdsi.max[pdsi.total.summary.FH.maxThreshold$pdsi.mean < -3], na.rm=T) # -2.8 max
-mean(pdsi.total.summary.FH.maxThreshold$pdsi.min[pdsi.total.summary.FH.maxThreshold$pdsi.mean < -0.4 & pdsi.total.summary.FH.maxThreshold$pdsi.mean > -0.5], na.rm=T) # -2.9 min
-mean(pdsi.total.summary.FH.maxThreshold$pdsi.max[pdsi.total.summary.FH.maxThreshold$pdsi.mean < -0.4 & pdsi.total.summary.FH.maxThreshold$pdsi.mean > -0.5], na.rm=T) # 2.7 max
-mean(pdsi.total.summary.FH.maxThreshold$pdsi.min[pdsi.total.summary.FH.maxThreshold$pdsi.mean > 2.5], na.rm=T) # 1.9 min
-mean(pdsi.total.summary.FH.maxThreshold$pdsi.max[pdsi.total.summary.FH.maxThreshold$pdsi.mean > 2.5], na.rm=T) # 2.9 max
-# make severity categories
-summary(pdsi.total.summary.FH.maxThreshold$Severity)
-ggplot(pdsi.total.summary.FH.maxThreshold) +
-  geom_density(aes(x=Severity))
-sev.df <- data.frame(Severity = c(0.02, 0.1, 0.96))
-# make a synthetic dataframe
-summary(pdsi.total.summary.FH.maxThreshold$PreNDVI)
+plot.Rc_Yrs_rf_inde.pdsi.min <- sensitivity.Rc_Yrs_rf_index %>% filter(target.var == 'pdsi.min') %>%  ggplot(aes(x = pdsi.min, y =Rc_Yrs_rf_index)) + geom_point(color= '#6f948c', alpha=0.5) +  geom_smooth( color= '#6f948c') + theme_bw() + ylab("Recovery (Years)")
 
-sensitivity_preNDVI.pdsi <- rbind(data.frame(pdsi.mean = -3, pdsi.min= -3.5, pdsi.max= -2.8, PreNDVI= seq(0.04, 0.4, 0.01), index="dry"), 
-                             data.frame(pdsi.mean = 0.45, pdsi.min= -2.9, pdsi.max= 2.7, PreNDVI= seq(0.04, 0.4, 0.01), index="normal"),
-                             data.frame(pdsi.mean = 2.75, pdsi.min= 1.9, pdsi.max= 2.9, PreNDVI= seq(0.04, 0.4, 0.01), index="wet"))
+plot.Rc_Yrs_rf_inde.pdsi.sd <- sensitivity.Rc_Yrs_rf_index %>% filter(target.var == 'pdsi.sd') %>%  ggplot(aes(x = pdsi.sd, y =Rc_Yrs_rf_index)) + geom_point(color= '#6f948c', alpha=0.5) +  geom_smooth( color= '#6f948c') + theme_bw() + ylab("Recovery (Years)")
 
-sensitivity_preNDVI.freq <- rbind(data.frame(pdsi.mean = -3, pdsi.min= -3.5, pdsi.max= -2.8, PreNDVI= seq(0.04, 0.4, 0.01), index="<4"), 
-                             data.frame(pdsi.mean = 0.45, pdsi.min= -2.9, pdsi.max= 2.7, PreNDVI= seq(0.04, 0.4, 0.01), index="4-6"),
-                             data.frame(pdsi.mean = 2.75, pdsi.min= 1.9, pdsi.max= 2.9, PreNDVI= seq(0.04, 0.4, 0.01), index=">6"))
+library(ggpubr)
 
-sensitivity_preNDVI <- merge(sensitivity_preNDVI, sev.df)
-
-# project model into dataframe
-sensitivity_preNDVI$threshold <- predict(threshold_rf_index, sensitivity_preNDVI)
-# plot
-ggplot(sensitivity_preNDVI) +
-  geom_line(aes(x=PreNDVI, y=threshold, col=Severity), size=5) +
-  facet_wrap(~Severity)
-# you can make it to 100 under any conditions. 
-# Any preNDVI can make it to 100 when wet. 
-# for normal conditions, only really hight preNDVI make it to 100, and low make it to 70 or 80, but only high make it to 100
-# for dry, only high ndvi make it to 100, low pre ndvi make it to 70 or 80
-# so a low prendvi can be inhibiting to systems when there is not enough moisture. 
-# ....
-# If you make it to 100 under med conditions you had a high preNDVI. 
-# getting to 100 under high conditions is associated with a low preNDVI
-
-
-# Fire History 
-summary(pdsi.total.summary.FH.maxThreshold$TotalFires) 
-# Total Fires: min= 1-2, med=3-4, high=6-8, max= 10-11
-
-# Prev.Int
-mean(pdsi.total.summary.FH.maxThreshold$Prev.Int[pdsi.total.summary.FH.maxThreshold$TotalFires < 2], na.rm=T) # min 45
-mean(pdsi.total.summary.FH.maxThreshold$Prev.Int[pdsi.total.summary.FH.maxThreshold$TotalFires >=3 & pdsi.total.summary.FH.maxThreshold$TotalFires <= 4], na.rm=T) # med =9
-mean(pdsi.total.summary.FH.maxThreshold$Prev.Int[pdsi.total.summary.FH.maxThreshold$TotalFires >=6 & pdsi.total.summary.FH.maxThreshold$TotalFires <= 8], na.rm=T) # high =6
-mean(pdsi.total.summary.FH.maxThreshold$Prev.Int[pdsi.total.summary.FH.maxThreshold$TotalFires >=10 & pdsi.total.summary.FH.maxThreshold$TotalFires <= 11], na.rm=T) # max=7
-
-# Severity
-mean(pdsi.total.summary.FH.maxThreshold$Severity[pdsi.total.summary.FH.maxThreshold$TotalFires < 2], na.rm=T) # min 0.1
-mean(pdsi.total.summary.FH.maxThreshold$Severity[pdsi.total.summary.FH.maxThreshold$TotalFires >=3 & pdsi.total.summary.FH.maxThreshold$TotalFires <= 4], na.rm=T) # med = 0.09 
-mean(pdsi.total.summary.FH.maxThreshold$Severity[pdsi.total.summary.FH.maxThreshold$TotalFires >=6 & pdsi.total.summary.FH.maxThreshold$TotalFires <= 8], na.rm=T) # high = 0.1
-mean(pdsi.total.summary.FH.maxThreshold$Severity[pdsi.total.summary.FH.maxThreshold$TotalFires >=10 & pdsi.total.summary.FH.maxThreshold$TotalFires <= 11], na.rm=T) # max= 0.07
-
-# make a synthetic dataframe 
-summary(pdsi.total.summary.FH.maxThreshold$PreNDVI)
-sensitivity_preNDVI_FH <- rbind(data.frame(TotalFires = 1.5, Prev.Int = 45, Severity= 0.1, PreNDVI= seq(0.04, 0.4, 0.01), index="min"), 
-                             data.frame(TotalFires = 3.5, Prev.Int = 9, Severity= 0.09, PreNDVI= seq(0.04, 0.4, 0.01), index="med"),
-                             data.frame(TotalFires = 7, Prev.Int = 6, Severity= 0.1, PreNDVI= seq(0.04, 0.4, 0.01), index="high"),
-                             data.frame(TotalFires = 10.5, Prev.Int = 7, Severity= 0.07, PreNDVI= seq(0.04, 0.4, 0.01), index="max"))
-# project model into dataframe
-sensitivity_preNDVI_FH$PostDateDif <- 600
-sensitivity_preNDVI_FH$threshold <- predict(threshold_rf_index, sensitivity_preNDVI_FH)
-# plot
-ggplot(sensitivity_preNDVI_FH) +
-  geom_line(aes(x=PreNDVI, y=Threshold, col=index), size=5) +
-  facet_wrap(~index)
-
-# when preNDVI less than .3, you have a lower chance of making it to 100
-# at lower freq, you need prendvi > .3 in order to make it to 100
-# more likely to reach 70 or higher if you have high or max freq
-# for lower ndvi, you are likely to recover to 70. 
-
-
-#############################################################################################################################
-# Y = RecYears_MaxT 
-#############################################################################################################################
-
-
-test <- getViz(M.RecY_maxT.FireHist)
-plot(test)
-
-M.RecY_maxT.Climate <- gam(Rec_Yrs ~
-                             s(pdsi.mean) + s(pdsi.max)+ s(pdsi.min) + s(nwet)+ s(coords.x1, coords.x2, bs='re') ,
-                           data =pdsi.total.summary.FH.maxThreshold, method = 'REML')
-
-summary(M.RecY_maxT.Climate)
-
-library(randomForest)
-
-#create ID column
-
-
-M.RecY.rf <- randomForest(Rec_Yrs ~ 
-                         Threshold + FireYear + 
-                   TotalFires + ndry.frac +
-                   Prev.Int + Severity +
-                   pdsi.min + pdsi.max +
-                   pdsi.mean + PreNDVI,  data = train )
-
-
-setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript" )
-save(train, test, M.RecY.rf, file="RF_Models.RDATA")
-
-varImpPlot(M.RecY.rf )
-
-
-# Sensitivity Analysis:
-
-sensitivity_Rec_Yrs.Threshold <- data.frame(
-  Threshold = unique(train$Threshold)[-7] %>% as.factor)
-
-sensitivity_Rec_Yrs.FireYear <- data.frame(
-  FireYear = seq( min(train$FireYear), max(train$FireYear), by=1))
+pdsi.grid <- ggarrange( 
+  plot.Rc_Yrs_rf_inde.pdsi.max ,
+  plot.Rc_Yrs_rf_inde.pdsi.mean,
+  plot.Rc_Yrs_rf_inde.pdsi.min, 
+  plot.Rc_Yrs_rf_inde.pdsi.sd, 
+  nrow=2, ncol=2, labels = c("B", "C", "D", "E")
   
+  )
 
-sensitivity.model.vars.lower <- train %>% group_by(Threshold, FireYear) %>% summarise(TotalFires = quantile(TotalFires, 0.25),
-                                                                                      ndry.frac = quantile(ndry.frac, 0.25 ),
-                                                                                      Prev.Int=quantile(Prev.Int, 0.25),
-                                                                                      Severity = quantile(Severity, 0.25),
-                                                                                      pdsi.min = quantile(pdsi.min, 0.25),
-                                                                                      pdsi.max = quantile(pdsi.max, 0.25),
-                                                                                      pdsi.mean = quantile(pdsi.mean, 0.25),
-                                                                                      PreNDVI = quantile( PreNDVI, 0.25),
-                                                                                      Quantile = as.factor(0.25)) %>% as.data.frame()
+colour_breaks <- c(1, 2, 3, 5, 7, 10, 15, 20)
+colours <- c( "darkblue",'#6f948c', "cyan", "goldenrod",'red')
 
-
-sensitivity.model.vars.mean <- train %>% group_by(Threshold, FireYear) %>% summarise(TotalFires = quantile(TotalFires, 0.5),
-                                                                                      ndry.frac = quantile(ndry.frac, 0.5 ),
-                                                                                      Prev.Int=quantile(Prev.Int, 0.5),
-                                                                                      Severity = quantile(Severity, 0.5),
-                                                                                      pdsi.min = quantile(pdsi.min, 0.5),
-                                                                                      pdsi.max = quantile(pdsi.max, 0.5),
-                                                                                      pdsi.mean = quantile(pdsi.mean, 0.5),
-                                                                                      PreNDVI = quantile( PreNDVI, 0.5),
-                                                                                      Quantile = as.factor(0.5)) %>% as.data.frame()
+map.recYears <- driver.analysis %>% ggplot( ) + geom_point( aes( x=coords.x1, y = coords.x2, colour =  Rec_Yrs), size=0.25) +
+  scale_colour_gradientn(
+    limits  = range(driver.analysis$Rec_Yrs),
+    colours = colours[c(1, seq_along(colours), length(colours))],
+    values  = c(0, scales::rescale(colour_breaks, from = range(driver.analysis$Rec_Yrs)), 1),
+  ) 
 
 
 
-sensitivity.model.vars.high <- train %>% group_by(Threshold, FireYear) %>% summarise(TotalFires = quantile(TotalFires, 0.75),
-                                                                                      ndry.frac = quantile(ndry.frac, 0.75 ),
-                                                                                      Prev.Int=quantile(Prev.Int, 0.75),
-                                                                                      Severity = quantile(Severity, 0.75),
-                                                                                      pdsi.min = quantile(pdsi.min, 0.75),
-                                                                                      pdsi.max = quantile(pdsi.max, 0.75),
-                                                                                      pdsi.mean = quantile(pdsi.mean, 0.75),
-                                                                                      PreNDVI = quantile( PreNDVI, 0.75),
-                                                                                      Quantile = as.factor(0.75)) %>% as.data.frame()
-
-# This file has the range of conditions of interest:
-sensitivity.model.vars <- rbind( sensitivity.model.vars.lower, sensitivity.model.vars.mean, sensitivity.model.vars.high)
+ggarrange(  ggarrange(map.recYears, labels="A"), pdsi.grid , nrow=1)
 
 
-# Sevsitivity files by topic
-sensitivity.model.vars %>% select(-c(ndry.frac)) %>% cross_join( data.frame(
-  ndry.frac = seq( min(train$ndry.frac), max(train$ndry.frac), by=0.05 ))))
+# Second Model
+varImpPlot(T80_rf_index)
 
-sensitivity_Rec_Yrs.TotalFires <- sensitivity.model.vars %>% select( -c(TotalFires)) %>% cross_join( data.frame(
-  TotalFires = seq( min(train$TotalFires), max(train$TotalFires), by=3) ))
+sensitivity.T80_rf_index %>% filter(target.var == 'PreNDVI') %>%  ggplot(aes(x = PreNDVI)) + geom_density(aes(colour =T80_rf_index), alpha=0.5)  + theme_bw() + ylab("Density") + 
+  facet_wrap(~FireType,  ncol=1)
 
+sensitivity.T80_rf_index %>% filter(target.var == 'pdsi.sd') %>%  ggplot(aes(x = pdsi.sd)) + geom_density(aes(colour =T80_rf_index), alpha=0.5)  + theme_bw() + ylab("Density") + 
+  facet_wrap(~FireType,  ncol=1)
 
-sensitivity_Rec_Yrs.ndry.frac <- sensitivity.model.vars %>% select(-c(ndry.frac)) %>% cross_join( data.frame(
-  ndry.frac = seq( min(train$ndry.frac), max(train$ndry.frac), by=0.05) ))
+sensitivity.T80_rf_index %>% filter(target.var == 'pdsi.max') %>%  ggplot(aes(x = pdsi.max)) + geom_density(aes(colour =T80_rf_index), alpha=0.5)  + theme_bw() + ylab("Density") + 
+  facet_wrap(~FireType,  ncol=1)
 
-sensitivity_Rec_Yrs.Prev.Int <- data.frame(
-  Prev.Int = seq( min(train$Prev.Int), max(train$Prev.Int) , by=10))
-  
-sensitivity_Rec_Yrs.Severity <- data.frame(
-  Severity = seq( min(train$Severity), max(train$Severity) , by=0.15))
+sensitivity.T80_rf_index %>% filter(target.var == 'pdsi.min') %>%  ggplot(aes(x = pdsi.min)) + geom_density(aes(colour =T80_rf_index), alpha=0.5)  + theme_bw() + ylab("Density")+ 
+  facet_wrap(~FireType,  ncol=1)
 
-sensitivity_Rec_Yrs.pdsi.min <- data.frame(
-  pdsi.min = seq( min(train$pdsi.min), max(train$pdsi.min) , by=1.7))
-
-sensitivity_Rec_Yrs.pdsi.max <- data.frame(
-  pdsi.max = seq( min(train$pdsi.max), max(train$pdsi.max) , by=1.7))
-
-sensitivity_Rec_Yrs.pdsi.mean <- data.frame(
-  pdsi.mean = seq( min(train$pdsi.mean), max(train$pdsi.mean) , by=1.7))
-
-sensitivity_Rec_Yrs.PreNDVI <- data.frame(
-  PreNDVI = seq( min(train$PreNDVI), max(train$PreNDVI) , by=0.1))
-
-sensitivity <- cross_join(sensitivity_Rec_Yrs.FireYear,
-                             sensitivity_Rec_Yrs.TotalFires) %>% 
-  cross_join(sensitivity_Rec_Yrs.ndry.frac) %>% 
-  cross_join(sensitivity_Rec_Yrs.Prev.Int) %>%  
-  cross_join(sensitivity_Rec_Yrs.Severity ) %>% 
-  cross_join( sensitivity_Rec_Yrs.pdsi.min) %>% 
-  cross_join(sensitivity_Rec_Yrs.pdsi.max ) %>% 
-  cross_join(sensitivity_Rec_Yrs.pdsi.mean ) %>% 
-  cross_join(sensitivity_Rec_Yrs.PreNDVI) %>%  cross_join(sensitivity_Rec_Yrs.Threshold)
-
-sensitivity$Threshold %>% levels
-
-library(randomForest)
-train %>% select( Threshold , FireYear , 
-                    TotalFires , ndry.frac ,
-                    Prev.Int , Severity ,
-                    pdsi.min , pdsi.max ,
-                    pdsi.mean , PreNDVI) %>% summary
-
-sensitivity %>% select( Threshold , FireYear , 
-                    TotalFires , ndry.frac ,
-                    Prev.Int , Severity ,
-                    pdsi.min , pdsi.max ,
-                    pdsi.mean , PreNDVI) %>% summary
-
-load("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript/RF_Models.RDATA" )
-
-
-sensitivity_Rec_Yrs.TotalFires$M.RecY.rf <- predict( M.RecY.rf, sensitivity_Rec_Yrs.TotalFires )
-
-
-setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript" )
-save(train, test, M.RecY.rf, sensitivity, file="RF_Models.RDATA")
-
-ggplot(data = sensitivity_Rec_Yrs.TotalFires, aes( x= TotalFires , y=M.RecY.rf, color=Threshold )) + geom_smooth()
-
-ggplot(data = sensitivity_Rec_Yrs.TotalFires, aes( x= TotalFires , y=M.RecY.rf, color=factor(FireYear) )) + geom_smooth()
-
-
-
-# plots
-TF <- plotGAM(M.RecY.FireHist.TEST, smooth.cov="TotalFires", plotCI=TRUE, groupCovs="Threshold") +
-  labs(x="Total Fires", y="Recovery Time (yrs)", title="", tag="a", color="Threshold") +
-  theme_bw() +
-  theme(legend.position = "none",
-        text = element_text(size = 20)) +
-  scale_x_continuous(limits = c(1, 9), n.breaks=6) +
-  scale_color_met_d("Tam") 
-TSF <- plotGAM(M.RecY.FireHist.TEST, smooth.cov="Prev.Int", plotCI=TRUE, groupCovs="Threshold") +
-  labs(x="Time Since Fire (yrs)", y="Recovery Time (yrs)", title="", tag="b", color="Threshold") +
-  theme_bw() +
-  theme(legend.position = "right",
-        text = element_text(size = 20)) +
-  scale_color_met_d("Tam") +
-  annotate("rect", xmin = 28, xmax = 44, ymin = -0.5, ymax = 7.5,
-           alpha = 1,fill = "white")
-SEV <- plotGAM(M.RecY.FireHist.TEST, smooth.cov="Severity", plotCI=TRUE, groupCovs="Threshold") +
-  labs(x="Severity", y="Recovery Time (yrs)", title="", tag="c", color="Threshold") +
-  theme_bw() +
-  theme(legend.position = "none",
-        text = element_text(size = 20)) +  
-  scale_x_continuous(limits = c(0, 0.5), n.breaks=4) +
-  scale_color_met_d("Tam") 
-PreNDVI <- plotGAM(M.RecY.FireHist.TEST, smooth.cov="PreNDVI", plotCI=TRUE, groupCovs="Threshold") +
-  labs(x="Pre-Fire NDVI", y="Recovery Time (yrs)", title="", tag="d", color="Threshold") +
-  theme_bw() +
-  theme(legend.position = "none",
-        text = element_text(size = 20)) +
-  scale_x_continuous(limits = c(0, 0.35), n.breaks=6) +
-  scale_color_met_d("Tam") 
-
-# plot
-ggplot(df, aes(x=pdsiCAT, y=emmean, color=pdsiCAT)) +
-  geom_point(size=5) +
-  #geom_bar(position="dodge", stat="identity") +
-  geom_errorbar(aes(ymin=emmean-SE, ymax=emmean+SE), width=.5, linewidth=.75) +
-  scale_color_manual(values=c("#a9845a", "#677853", "#738e8e"))+
-  theme_bw() +
-  labs(y="Recovery Time (years)", x="Post-Fire Climate", color="Recovery Category") +
-  theme(text = element_text(size = 20), 
-        legend.position = "none") 
+sensitivity.T80_rf_index %>% filter(target.var == 'pdsi.mean') %>%  ggplot(aes(x = pdsi.mean)) + geom_density(aes(colour =T80_rf_index))  + theme_bw() + ylab("Density") + 
+  facet_wrap(~FireType,  ncol=1)
