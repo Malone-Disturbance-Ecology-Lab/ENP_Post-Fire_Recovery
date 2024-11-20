@@ -12,6 +12,7 @@ library(corrplot)
 library(randomForest)
 library(splitstackshape)
 library(ggplot2)
+library(caret)
 
 
 # Load data
@@ -119,7 +120,6 @@ setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript")
 save(T80_rf_index, test, train,T80_rf_index.vars , file="RF_threshold_index.RDATA")
 
 # Recovery Time model: ####
-train %>% names()
 Rc_Yrs_rf_index.vsurf <- VSURF(train[, c(3:6, 8:9, 15:19, 25, 35)], train[, 23], ntree = 500,
                             RFimplem = "randomForest", 
                             clusterType = "PSOCK", 
@@ -150,17 +150,18 @@ setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript")
 save(Rc_Yrs_rf_index, test, train,Rc_Yrs_rf_index.vars , file="RF_Rec_Yrs_index.RDATA")
 
 # Data Visualization ####
-load("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript/DriversData.RDATA")
-load("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript/RF_threshold_index.RDATA")
-load("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript/RF_Rec_Yrs_index.RDATA")
 
 library(ggplot2)
 library(tidyverse)
 library(randomForest)
 
+load("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript/DriversData.RDATA")
+load("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript/RF_threshold_index.RDATA")
+load("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript/RF_Rec_Yrs_index.RDATA")
+
 #MODELS:
 Rc_Yrs_rf_index.vars 
-T80_rf_index
+T80_rf_index.vars
 
 # Sensitivity Analysis......................................................####
 
@@ -168,15 +169,34 @@ sensitivity.mean <- driver.analysis %>% summarise(
   pdsi.sd = mean(pdsi.sd, na.rm=T),
   pdsi.max = mean(pdsi.max , na.rm=T), 
   pdsi.min = mean(pdsi.min , na.rm=T), 
-  pdsi.mean = mean(pdsi.mean , na.rm=T))
-
-sensitivity.mean.group <- driver.analysis %>% group_by(FireType, freq.index)  %>% summarise(
-  pdsi.sd = mean(pdsi.sd, na.rm=T),
-  pdsi.max = mean(pdsi.max , na.rm=T), 
-  pdsi.min = mean(pdsi.min , na.rm=T), 
   pdsi.mean = mean(pdsi.mean , na.rm=T),
-  TotalFires = mean(TotalFires , na.rm=T),
-  PreNDVI = mean(PreNDVI, na.rm=T))
+  PreNDVI = mean(PreNDVI , na.rm=T),
+  Prev.Int = mean(PreNDVI , na.rm=T),
+  PostDateDif = mean(PostDateDif , na.rm=T),
+  Severity = mean(Severity , na.rm=T)) %>% mutate(level="mean")
+
+sensitivity.max <- driver.analysis %>% summarise(
+  pdsi.sd = max(pdsi.sd, na.rm=T),
+  pdsi.max = max(pdsi.max , na.rm=T), 
+  pdsi.mean = max(pdsi.mean , na.rm=T), 
+  pdsi.min = max(pdsi.min , na.rm=T),
+  PreNDVI = max(PreNDVI , na.rm=T),
+  Prev.Int = max(PreNDVI , na.rm=T),
+  PostDateDif = max(PostDateDif , na.rm=T),
+  Severity = max(Severity , na.rm=T))%>% mutate(level="max")
+
+sensitivity.min <- driver.analysis %>% summarise(
+  pdsi.sd = min(pdsi.sd, na.rm=T),
+  pdsi.max = min(pdsi.max , na.rm=T), 
+  pdsi.mean = min(pdsi.mean , na.rm=T), 
+  pdsi.min = min(pdsi.min , na.rm=T),
+  PreNDVI = min(PreNDVI , na.rm=T),
+  Prev.Int = min(PreNDVI , na.rm=T),
+  PostDateDif = min(PostDateDif , na.rm=T),
+  Severity = min(Severity , na.rm=T))%>% mutate(level="min")
+
+sensitivity.mean <- sensitivity.mean %>% rbind( sensitivity.max, sensitivity.min)
+
 
 summary.var <- function( var){
   var.df = data.frame( var =seq(min(var), max(var), ((max(var)- min(var))/10))) %>% as.data.frame()
@@ -185,7 +205,7 @@ summary.var <- function( var){
 summary.df <- function( mean.conditions, target.var, df){
   
   target.var.df = df %>% select(target.var) %>% summary.var() %>% mutate(target.var = var ) %>% select(target.var)
-  summary.df <- mean.conditions %>% select(-c(target.var)) %>%  cross_join(target.var.df)
+  summary.df <- mean.conditions %>% select(-c(target.var)) %>%cross_join(target.var.df)
   return(summary.df)
 }
                      
@@ -206,77 +226,55 @@ sensitivity.mean.pdsi.min <- summary.df(mean.conditions= sensitivity.mean,
                                                                                                        target.var = 'pdsi.min') 
 
 
-sensitivity.Rc_Yrs_rf_index <- rbind( sensitivity.mean.pdsi.sd,
-                                           sensitivity.mean.pdsi.max,
-                                           sensitivity.mean.pdsi.mean, 
-                                           sensitivity.mean.pdsi.min)
 
-sensitivity.Rc_Yrs_rf_index$Rc_Yrs_rf_index <-  predict(Rc_Yrs_rf_index ,sensitivity.Rc_Yrs_rf_index)
+sensitivity.mean.PreNDVI <- summary.df(mean.conditions= sensitivity.mean, 
+                                      target.var = 'PreNDVI', df=driver.analysis ) %>% mutate(PreNDVI=target.var,
+                                                                                              target.var = 'PreNDVI') 
 
-rm(sensitivity.mean.pdsi.sd,
-     sensitivity.mean.pdsi.max,
-     sensitivity.mean.pdsi.mean, 
-     sensitivity.mean.pdsi.min)
+sensitivity.mean.Prev.Int<- summary.df(mean.conditions= sensitivity.mean, 
+                                      target.var = 'Prev.Int', df=driver.analysis ) %>% mutate(Prev.Int=target.var,
+                                                                                              target.var = 'Prev.Int') 
 
-sensitivity.mean.group.pdsi.sd <- summary.df(mean.conditions= sensitivity.mean.group, 
-                                       target.var = 'pdsi.sd', df=driver.analysis ) %>% mutate(pdsi.sd=target.var ,
-                                                                                               target.var = 'pdsi.sd') 
-
-sensitivity.mean.group.pdsi.max <- summary.df(mean.conditions= sensitivity.mean.group, 
-                                        target.var = 'pdsi.max', df=driver.analysis ) %>% mutate(pdsi.max=target.var ,
-                                                                                                 target.var = 'pdsi.max') 
-
-sensitivity.mean.group.pdsi.mean <- summary.df(mean.conditions= sensitivity.mean.group, 
-                                         target.var = 'pdsi.mean', df=driver.analysis )%>% mutate(pdsi.mean=target.var ,
-                                                                                                  target.var = 'pdsi.mean') 
-
-sensitivity.mean.group.pdsi.min <- summary.df(mean.conditions= sensitivity.mean.group, 
-                                        target.var = 'pdsi.min', df=driver.analysis ) %>% mutate(pdsi.min=target.var,
-                                                                                                 target.var = 'pdsi.min')
-
-sensitivity.mean.group.TotalFires <- summary.df(mean.conditions= sensitivity.mean.group, 
-                                              target.var = 'TotalFires', df=driver.analysis ) %>% mutate(TotalFires=target.var,
-                                                                                                       target.var = 'TotalFires')
+sensitivity.mean.PostDateDif<- summary.df(mean.conditions= sensitivity.mean, 
+                                      target.var = 'PostDateDif', df=driver.analysis ) %>% mutate(PostDateDif=target.var,
+                                                                                              target.var = 'PostDateDif') 
 
 
-sensitivity.mean.group.PreNDVI <- summary.df(mean.conditions= sensitivity.mean.group, 
-                                               target.var = 'PreNDVI', df=driver.analysis ) %>% mutate(PreNDVI=target.var,
-                                                                                                        target.var = 'PreNDVI')
-
-sensitivity.T80_rf_index <- rbind( sensitivity.mean.group.pdsi.sd,
-                                      sensitivity.mean.group.pdsi.max,
-                                      sensitivity.mean.group.pdsi.mean, 
-                                      sensitivity.mean.group.pdsi.min,
-                                   sensitivity.mean.group.TotalFires,
-                                   sensitivity.mean.group.PreNDVI )
-
-sensitivity.T80_rf_index$T80_rf_index <-  predict(T80_rf_index ,sensitivity.T80_rf_index)
-
-rm( sensitivity.mean.group.pdsi.sd,
-         sensitivity.mean.group.pdsi.max,
-         sensitivity.mean.group.pdsi.mean, 
-         sensitivity.mean.group.pdsi.min,
-         sensitivity.mean.group.TotalFires,
-         sensitivity.mean.group.PreNDVI )
+sensitivity.mean.Severity <- summary.df(mean.conditions= sensitivity.mean, 
+                                          target.var = 'Severity', df=driver.analysis ) %>% mutate(Severity=target.var,
+                                                                                                      target.var = 'Severity') 
 
 
+sensitivity.df <- rbind( sensitivity.mean.pdsi.sd,sensitivity.mean.pdsi.max,
+                         sensitivity.mean.pdsi.mean, sensitivity.mean.pdsi.min, 
+                         sensitivity.mean.Severity, sensitivity.mean.PostDateDif,
+                         sensitivity.mean.Prev.Int, sensitivity.mean.PreNDVI)
+
+sensitivity.df$Rc_Yrs_rf_index <-  predict(Rc_Yrs_rf_index ,sensitivity.df )
+sensitivity.df$T80_rf_index <-  predict(T80_rf_index ,sensitivity.df)
+
+
+rm( sensitivity.mean.pdsi.sd,sensitivity.mean.pdsi.max,
+    sensitivity.mean.pdsi.mean, sensitivity.mean.pdsi.min, 
+    sensitivity.mean.Severity,sensitivity.mean.PostDateDif,
+    sensitivity.mean.Prev.Int,sensitivity.mean.PreNDVI)
 
 
 library(randomForest)
 # save
 setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript")
-save(sensitivity.T80_rf_index, sensitivity.Rc_Yrs_rf_index,
+save(sensitivity.df,
      file="Sensitivity_data.RDATA")
 
 # Plots for Rc_Yrs_rf_index:
 
-plot.Rc_Yrs_rf_inde.pdsi.max <-  sensitivity.Rc_Yrs_rf_index %>% filter(target.var == 'pdsi.max') %>%  ggplot(aes(x = pdsi.max, y =Rc_Yrs_rf_index)) + geom_point(color= '#6f948c', alpha=0.5) +  geom_smooth( color= '#6f948c') + theme_bw() + ylab("Recovery (Years)")
+plot.Rc_Yrs_rf_inde.pdsi.max <-  sensitivity.df %>% filter(target.var == 'pdsi.max') %>%  ggplot(aes(x = pdsi.max, y =Rc_Yrs_rf_index)) + geom_point(color= '#6f948c', alpha=0.5) +  geom_smooth( color= '#6f948c') + theme_bw() + ylab("Recovery (Years)")
 
-plot.Rc_Yrs_rf_inde.pdsi.mean <- sensitivity.Rc_Yrs_rf_index %>% filter(target.var == 'pdsi.mean') %>%  ggplot(aes(x = pdsi.mean, y =Rc_Yrs_rf_index)) + geom_point(color= '#6f948c', alpha=0.5) +  geom_smooth( color= '#6f948c') + theme_bw()+ ylab("Recovery (Years)")
+plot.Rc_Yrs_rf_inde.pdsi.mean <- sensitivity.df %>% filter(target.var == 'pdsi.mean') %>%  ggplot(aes(x = pdsi.mean, y =Rc_Yrs_rf_index)) + geom_point(color= '#6f948c', alpha=0.5) +  geom_smooth( color= '#6f948c') + theme_bw()+ ylab("Recovery (Years)")
 
-plot.Rc_Yrs_rf_inde.pdsi.min <- sensitivity.Rc_Yrs_rf_index %>% filter(target.var == 'pdsi.min') %>%  ggplot(aes(x = pdsi.min, y =Rc_Yrs_rf_index)) + geom_point(color= '#6f948c', alpha=0.5) +  geom_smooth( color= '#6f948c') + theme_bw() + ylab("Recovery (Years)")
+plot.Rc_Yrs_rf_inde.pdsi.min <- sensitivity.df %>% filter(target.var == 'pdsi.min') %>%  ggplot(aes(x = pdsi.min, y =Rc_Yrs_rf_index)) + geom_point(color= '#6f948c', alpha=0.5) +  geom_smooth( color= '#6f948c') + theme_bw() + ylab("Recovery (Years)")
 
-plot.Rc_Yrs_rf_inde.pdsi.sd <- sensitivity.Rc_Yrs_rf_index %>% filter(target.var == 'pdsi.sd') %>%  ggplot(aes(x = pdsi.sd, y =Rc_Yrs_rf_index)) + geom_point(color= '#6f948c', alpha=0.5) +  geom_smooth( color= '#6f948c') + theme_bw() + ylab("Recovery (Years)")
+plot.Rc_Yrs_rf_inde.pdsi.sd <- sensitivity.df %>% filter(target.var == 'pdsi.sd') %>%  ggplot(aes(x = pdsi.sd, y =Rc_Yrs_rf_index)) + geom_point(color= '#6f948c', alpha=0.5) +  geom_smooth( color= '#6f948c') + theme_bw() + ylab("Recovery (Years)")
 
 library(ggpubr)
 
@@ -292,7 +290,7 @@ pdsi.grid <- ggarrange(
 colour_breaks <- c(1, 2, 3, 5, 7, 10, 15, 20)
 colours <- c( "darkblue",'#6f948c', "cyan", "goldenrod",'red')
 
-map.recYears <- driver.analysis %>% ggplot( ) + geom_point( aes( x=coords.x1, y = coords.x2, colour =  Rec_Yrs), size=0.25) +
+map.recYears <- driver.analysis %>% ggplot( ) + geom_point( aes( x=coords.x1, y = coords.x2, colour =  Rec_Yrs), size=0.3) +
   scale_colour_gradientn(
     limits  = range(driver.analysis$Rec_Yrs),
     colours = colours[c(1, seq_along(colours), length(colours))],
@@ -307,17 +305,19 @@ ggarrange(  ggarrange(map.recYears, labels="A"), pdsi.grid , nrow=1)
 # Second Model
 varImpPlot(T80_rf_index)
 
-sensitivity.T80_rf_index %>% filter(target.var == 'PreNDVI') %>%  ggplot(aes(x = PreNDVI)) + geom_density(aes(colour =T80_rf_index), alpha=0.5)  + theme_bw() + ylab("Density") + 
-  facet_wrap(~FireType,  ncol=1)
+sensitivity.df %>% filter(target.var == 'PreNDVI') %>%  ggplot(aes(x = PreNDVI)) + geom_density(aes(colour =T80_rf_index), alpha=0.5)  + theme_bw() + ylab("Density") 
 
-sensitivity.T80_rf_index %>% filter(target.var == 'pdsi.sd') %>%  ggplot(aes(x = pdsi.sd)) + geom_density(aes(colour =T80_rf_index), alpha=0.5)  + theme_bw() + ylab("Density") + 
-  facet_wrap(~FireType,  ncol=1)
+sensitivity.df %>% filter(target.var == 'pdsi.sd') %>%  ggplot(aes(x = pdsi.sd)) + geom_density(aes(colour =T80_rf_index), alpha=0.5)  + theme_bw() + ylab("Density") 
 
-sensitivity.T80_rf_index %>% filter(target.var == 'pdsi.max') %>%  ggplot(aes(x = pdsi.max)) + geom_density(aes(colour =T80_rf_index), alpha=0.5)  + theme_bw() + ylab("Density") + 
-  facet_wrap(~FireType,  ncol=1)
+sensitivity.df %>% filter(target.var == 'pdsi.max') %>%  ggplot(aes(x = pdsi.max)) + geom_density(aes(colour =T80_rf_index), alpha=0.5)  + theme_bw() + ylab("Density") 
 
-sensitivity.T80_rf_index %>% filter(target.var == 'pdsi.min') %>%  ggplot(aes(x = pdsi.min)) + geom_density(aes(colour =T80_rf_index), alpha=0.5)  + theme_bw() + ylab("Density")+ 
-  facet_wrap(~FireType,  ncol=1)
+sensitivity.df %>% filter(target.var == 'pdsi.min') %>%  ggplot(aes(x = pdsi.min)) + geom_density(aes(colour =T80_rf_index), alpha=0.5)  + theme_bw() + ylab("Density")
 
-sensitivity.T80_rf_index %>% filter(target.var == 'pdsi.mean') %>%  ggplot(aes(x = pdsi.mean)) + geom_density(aes(colour =T80_rf_index))  + theme_bw() + ylab("Density") + 
-  facet_wrap(~FireType,  ncol=1)
+sensitivity.df %>% filter(target.var == 'pdsi.mean') %>%  ggplot(aes(x = pdsi.mean)) + geom_density(aes(colour =T80_rf_index))  + theme_bw() + ylab("Density") 
+
+sensitivity.df %>% filter(target.var == 'PostDateDif') %>%  ggplot(aes(x = PostDateDif)) + geom_density(aes(colour =T80_rf_index))  + theme_bw() + ylab("Density") 
+
+sensitivity.df %>% filter(target.var == 'Severity') %>%  ggplot(aes(x = Severity)) + geom_density(aes(colour =T80_rf_index))  + theme_bw() + ylab("Density") 
+
+sensitivity.df %>% filter(target.var == 'Prev.Int') %>%  ggplot(aes(x = Prev.Int)) + geom_density(aes(colour =T80_rf_index))  + theme_bw() + ylab("Density") 
+
