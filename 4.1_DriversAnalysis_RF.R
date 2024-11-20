@@ -305,19 +305,32 @@ ggarrange(  ggarrange(map.recYears, labels="A"), pdsi.grid , nrow=1)
 # Second Model
 varImpPlot(T80_rf_index)
 
-sensitivity.df %>% filter(target.var == 'PreNDVI') %>%  ggplot(aes(x = PreNDVI)) + geom_density(aes(colour =T80_rf_index), alpha=0.5)  + theme_bw() + ylab("Density") 
+plot.T80_rf_index.PreNDVI <-  sensitivity.df %>% filter(target.var == 'PreNDVI') %>%  ggplot(aes(x = PreNDVI)) + geom_density(aes(colour =T80_rf_index), alpha=0.5)  + theme_bw() + ylab("Density") 
 
-sensitivity.df %>% filter(target.var == 'pdsi.sd') %>%  ggplot(aes(x = pdsi.sd)) + geom_density(aes(colour =T80_rf_index), alpha=0.5)  + theme_bw() + ylab("Density") 
+plot.T80_rf_index.pdsi.sd <- sensitivity.df %>% filter(target.var == 'pdsi.sd') %>%  ggplot(aes(x = pdsi.sd)) + geom_density(aes(colour =T80_rf_index), alpha=0.5)  + theme_bw() + ylab("Density") 
 
-sensitivity.df %>% filter(target.var == 'pdsi.max') %>%  ggplot(aes(x = pdsi.max)) + geom_density(aes(colour =T80_rf_index), alpha=0.5)  + theme_bw() + ylab("Density") 
+plot.T80_rf_index.pdsi.max<-sensitivity.df %>% filter(target.var == 'pdsi.max') %>%  ggplot(aes(x = pdsi.max)) + geom_density(aes(colour =T80_rf_index), alpha=0.5)  + theme_bw() + ylab("Density") 
 
-sensitivity.df %>% filter(target.var == 'pdsi.min') %>%  ggplot(aes(x = pdsi.min)) + geom_density(aes(colour =T80_rf_index), alpha=0.5)  + theme_bw() + ylab("Density")
+plot.T80_rf_index.pdsi.min <-sensitivity.df %>% filter(target.var == 'pdsi.min') %>%  ggplot(aes(x = pdsi.min)) + geom_density(aes(colour =T80_rf_index), alpha=0.5)  + theme_bw() + ylab("Density")
 
-sensitivity.df %>% filter(target.var == 'pdsi.mean') %>%  ggplot(aes(x = pdsi.mean)) + geom_density(aes(colour =T80_rf_index))  + theme_bw() + ylab("Density") 
+plot.T80_rf_index.pdsi.mean <-sensitivity.df %>% filter(target.var == 'pdsi.mean') %>%  ggplot(aes(x = pdsi.mean)) + geom_density(aes(colour =T80_rf_index))  + theme_bw() + ylab("Density") 
 
-sensitivity.df %>% filter(target.var == 'PostDateDif') %>%  ggplot(aes(x = PostDateDif)) + geom_density(aes(colour =T80_rf_index))  + theme_bw() + ylab("Density") 
+plot.T80_rf_index.PostDateDif <-sensitivity.df %>% filter(target.var == 'PostDateDif') %>%  ggplot(aes(x = PostDateDif)) + geom_density(aes(colour =T80_rf_index))  + theme_bw() + ylab("Density") 
 
-sensitivity.df %>% filter(target.var == 'Severity') %>%  ggplot(aes(x = Severity)) + geom_density(aes(colour =T80_rf_index))  + theme_bw() + ylab("Density") 
+plot.T80_rf_index.Severity <-sensitivity.df %>% filter(target.var == 'Severity') %>%  ggplot(aes(x = Severity)) + geom_density(aes(colour =T80_rf_index))  + theme_bw() + ylab("Density") 
 
-sensitivity.df %>% filter(target.var == 'Prev.Int') %>%  ggplot(aes(x = Prev.Int)) + geom_density(aes(colour =T80_rf_index))  + theme_bw() + ylab("Density") 
+plot.T80_rf_index.Prev.Int <-sensitivity.df %>% filter(target.var == 'Prev.Int') %>%  ggplot(aes(x = Prev.Int)) + geom_density(aes(colour =T80_rf_index))  + theme_bw() + ylab("Density") 
+
+map.rec.status <- driver.analysis %>% ggplot( ) + geom_point( aes( x=coords.x1, y = coords.x2, colour =  rec.status), size=0.3) 
+
+
+ggarrange( 
+map.rec.status,
+plot.T80_rf_index.pdsi.sd,
+plot.T80_rf_index.pdsi.max,
+plot.T80_rf_index.pdsi.mean,
+plot.T80_rf_index.pdsi.min,
+plot.T80_rf_index.PostDateDif,
+plot.T80_rf_index.Severity,
+plot.T80_rf_index.Prev.Int, nrow=2, ncol=4, labels= c( "A", "B", "C", "D", "E","F", "G", "H"),common.legend = TRUE)
 
