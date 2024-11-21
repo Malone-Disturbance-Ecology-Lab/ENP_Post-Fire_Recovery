@@ -13,6 +13,8 @@ library(randomForest)
 library(splitstackshape)
 library(ggplot2)
 library(caret)
+library(ggridges)
+library(ggpubr)
 
 
 # Load data
@@ -103,7 +105,7 @@ T80_rf_index.vsurf <- VSURF(train[, c(3:6, 8:9, 15:19, 25, 35)], train[, 36], nt
 T80_rf_index.vars <-names( train[, c(3:6, 8:9, 15:19, 25, 35)]) [T80_rf_index.vsurf$varselect.pred] 
 
 T80_rf_index <- randomForest( rec.status ~ .,
-                              data= train %>% select( c('rec.status', T80_rf_index.vars) ),
+                              data= train %>% select(c(rec.status, all_of(T80_rf_index.vars))),
                               importance=TRUE,
                               predicted=TRUE,
                               keep.inbag=TRUE)
@@ -309,28 +311,32 @@ plot.T80_rf_index.PreNDVI <-  sensitivity.df %>% filter(target.var == 'PreNDVI')
 
 plot.T80_rf_index.pdsi.sd <- sensitivity.df %>% filter(target.var == 'pdsi.sd') %>%  ggplot(aes(x = pdsi.sd)) + geom_density(aes(colour =T80_rf_index), alpha=0.5)  + theme_bw() + ylab("Density") 
 
-plot.T80_rf_index.pdsi.max<-sensitivity.df %>% filter(target.var == 'pdsi.max') %>%  ggplot(aes(x = pdsi.max)) + geom_density(aes(colour =T80_rf_index), alpha=0.5)  + theme_bw() + ylab("Density") 
+plot.T80_rf_index.pdsi.max <-sensitivity.df %>% filter(target.var == 'pdsi.max') %>%  ggplot(aes(x = pdsi.max)) + geom_density(aes(colour =T80_rf_index), alpha=0.5)  + theme_bw() + ylab("Density") 
 
-plot.T80_rf_index.pdsi.min <-sensitivity.df %>% filter(target.var == 'pdsi.min') %>%  ggplot(aes(x = pdsi.min)) + geom_density(aes(colour =T80_rf_index), alpha=0.5)  + theme_bw() + ylab("Density")
+plot.T80_rf_index.pdsi.min <-sensitivity.df %>% filter(target.var == 'pdsi.min') %>%  ggplot( aes(x = pdsi.min, y = level, fill = T80_rf_index)) + geom_density_ridges_gradient( ) +  theme_ridges() + theme(legend.position = "none")
 
-plot.T80_rf_index.pdsi.mean <-sensitivity.df %>% filter(target.var == 'pdsi.mean') %>%  ggplot(aes(x = pdsi.mean)) + geom_density(aes(colour =T80_rf_index))  + theme_bw() + ylab("Density") 
+plot.T80_rf_index.pdsi.mean <- sensitivity.df %>% filter(target.var == 'pdsi.mean') %>%  ggplot( aes(x = pdsi.mean, y = level, fill = T80_rf_index)) + geom_density_ridges_gradient( ) +  theme_ridges() + theme(legend.position = "none")
 
-plot.T80_rf_index.PostDateDif <-sensitivity.df %>% filter(target.var == 'PostDateDif') %>%  ggplot(aes(x = PostDateDif)) + geom_density(aes(colour =T80_rf_index))  + theme_bw() + ylab("Density") 
+plot.T80_rf_index.PostDateDif <- sensitivity.df %>% filter(target.var == 'PostDateDif') %>%  ggplot( aes(x = PostDateDif, y = level, fill = T80_rf_index)) + geom_density_ridges_gradient( ) +  theme_ridges() + theme(legend.position = "none")
 
 plot.T80_rf_index.Severity <-sensitivity.df %>% filter(target.var == 'Severity') %>%  ggplot(aes(x = Severity)) + geom_density(aes(colour =T80_rf_index))  + theme_bw() + ylab("Density") 
 
-plot.T80_rf_index.Prev.Int <-sensitivity.df %>% filter(target.var == 'Prev.Int') %>%  ggplot(aes(x = Prev.Int)) + geom_density(aes(colour =T80_rf_index))  + theme_bw() + ylab("Density") 
+plot.T80_rf_index.Prev.Int <- sensitivity.df %>% filter(target.var == 'Prev.Int') %>%  ggplot( aes(x = Prev.Int, y = level, fill = T80_rf_index)) + geom_density_ridges_gradient( ) +  theme_ridges() + theme(legend.position = "none")
 
 map.rec.status <- driver.analysis %>% ggplot( ) + geom_point( aes( x=coords.x1, y = coords.x2, colour =  rec.status), size=0.3) 
 
 
-ggarrange( 
-map.rec.status,
+map.plot <- ggarrange( map.rec.status, labels= c( "A"))
+
+driver.plots <- ggarrange( 
+plot.T80_rf_index.PreNDVI,
 plot.T80_rf_index.pdsi.sd,
 plot.T80_rf_index.pdsi.max,
 plot.T80_rf_index.pdsi.mean,
 plot.T80_rf_index.pdsi.min,
 plot.T80_rf_index.PostDateDif,
 plot.T80_rf_index.Severity,
-plot.T80_rf_index.Prev.Int, nrow=2, ncol=4, labels= c( "A", "B", "C", "D", "E","F", "G", "H"),common.legend = TRUE)
+plot.T80_rf_index.Prev.Int, nrow=2, ncol=4, labels= c( "B", "C", "D", "E","F", "G", "H", "I"),common.legend = TRUE)
 
+
+final.plot.T80 <- ggarrange(map.plot , driver.plots, ncol=1)
