@@ -130,7 +130,7 @@ Rc_Yrs_rf_index.vsurf <- VSURF(train[, c(3:6, 8:9, 15:19, 25, 35)], train[, 23],
 
 Rc_Yrs_rf_index.vars <-names( train[, c(3:6, 8:9, 15:19, 25, 35)]) [Rc_Yrs_rf_index.vsurf$varselect.pred]
 
-
+train %>% names
 Rc_Yrs_rf_index <- randomForest( Rec_Yrs ~ .,
                               data= train %>% select(all_of(c('Rec_Yrs', Rc_Yrs_rf_index.vars) )),
                               importance=TRUE,
@@ -161,9 +161,15 @@ load("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript/DriversDa
 load("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript/RF_threshold_index.RDATA")
 load("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript/RF_Rec_Yrs_index.RDATA")
 
-#MODELS:
+#MODELS Summary: https://r-graph-gallery.com/table.html
 Rc_Yrs_rf_index.vars 
 T80_rf_index.vars
+
+Rc_Yrs_rf_index
+T80_rf_index
+
+
+
 
 # Sensitivity Analysis......................................................####
 
