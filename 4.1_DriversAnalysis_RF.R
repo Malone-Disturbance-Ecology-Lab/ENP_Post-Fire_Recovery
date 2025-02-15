@@ -16,7 +16,7 @@ library(caret)
 library(ggridges)
 library(ggpubr)
 
-
+setwd('/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod')
 # Load data
 load("./Climate/Rec_pdsi_summary.RDATA")
 load("./Recovery/Recov_Rates.RDATA")
@@ -346,3 +346,6 @@ plot.T80_rf_index.Prev.Int, nrow=2, ncol=4, labels= c( "B", "C", "D", "E","F", "
 
 
 final.plot.T80 <- ggarrange(map.plot , driver.plots, ncol=1)
+
+
+

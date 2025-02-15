@@ -693,14 +693,13 @@ setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod")
 setwd("./Baseline")
 load( file="BL_train_test.RDATA")
 
-train.1 <- stratified(train, c( "Obs_month", "tmin", "tmax", "precip", "TotalFires",  "Prev.Int"), .1)
-train.25 <- stratified(train, c( "Obs_month", "tmin", "tmax", "precip", "TotalFires", "Prev.Int"), .25)
-
 load("./BL_train_test.RDATA")
 load(file="NDVI_rf.RDATA")
 
+train.tf1 <- train %>% filter( TotalFires == 1) 
+train.tf1$TSF %>% hist
 
-
+length(train.tf1$TSF[ train.tf1$TSF > 15])/ length(train.tf1$TSF)
 # Get a list of variables: 
 
 data_name = getCall(NDVI_rf)$data %>% eval
