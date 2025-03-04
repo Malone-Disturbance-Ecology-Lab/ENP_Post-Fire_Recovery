@@ -1,4 +1,4 @@
-# Summary of Fire impacts relative to ppre-fire NDVI
+# Summary of Fire impacts relative to pre-fire NDVI
 
 rm(list=ls())
 
