@@ -4,8 +4,7 @@
 
 # This script:
   # 1. downloads monthly climate data from DAYMET 
-  # 2. stacks monthly layers
-  # 3. masks stacks to the Everglades boundary
+  # 2. stacks monthly layers and masks stacks to the Everglades boundary
 
 
 rm(list=ls())
@@ -35,7 +34,7 @@ library(terra)
 setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Seasonal_Cond")
 
 ##########################################################################################################################################################
-# IMPORTING DATA
+# 1. IMPORTING DATA. **** run once *****
 ##########################################################################################################################################################
 
 # DOWNLOAD DAYMET GRIDED CLIMATE DATA..........................................................................................................
@@ -60,7 +59,7 @@ download_daymet_ncss( c(26.5, -81.75, 25, -80.25),
 
 
 ##########################################################################################################################################################
-# DATA PROCESSING 
+# 2. DATA PROCESSING 
 ##########################################################################################################################################################
 
 # LoadEVG boundary for masking

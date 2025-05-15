@@ -6,9 +6,6 @@
 # 1. Identifies last available pre-fire image and first available post-fire image
 # 2. Calculates the time between imaging dates and fire start and end dates
 
-
-# For rasterizing and mapping severity, see "FCE_ASM" and "FCE_Map" Scripts.
-
 library(tidyverse)
 library(tidyr)
 library(ggplot2)
@@ -24,7 +21,7 @@ rm(list=ls())
 setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Severity")
 
 ##########################################################################################################################################################
-# CALCUALTE SEVERITY
+# 1. CALCUALTE SEVERITY
 ##########################################################################################################################################################
 
 # Load Recovery Master Dataframe
@@ -121,7 +118,7 @@ save(Sev_df, file="Sev_df.RDATA")
 
 
 ##########################################################################################################################################################
-#  PRE- POST- DATE DIFFERENCE
+#  2. PRE- POST- DATE DIFFERENCE
 ##########################################################################################################################################################
 load("./Sev_df.RDATA")
 

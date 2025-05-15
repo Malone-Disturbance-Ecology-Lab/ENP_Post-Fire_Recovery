@@ -2,45 +2,31 @@
 # M.Grace McLeod (2022)
 
 
-# this scrips does the following steps to process images for 4 ARD Landsat tiles covering EVER and BICY (EVG)
+# this script does the following steps to process images for 4 ARD Landsat tiles covering the Everglades
+
 # Images were downloaded manually from Earth Explorer:  https://earthexplorer.usgs.gov/
-# 1. open tar files
+
+# 1. open tar files and saves Landsat .tif image 
 # 2. extracts spectral data from tile-specific stacks to upland sample points and filters data for clouds and QAQC
-# 3. merges all tile-specific dataframes to make a Spectral Master dataframe
-##########################################################################################################################################################
+# 3. merges all tile-specific dataframes to make a Spectral Master dataframe and calculates spectral indicies ("Spec_Master.RDATA")
 
 
 rm(list=ls())
 
 library(landsat)
-library(rgdal)
 library(sp)
 library(fields)
 library(RGISTools)
 library(remotes)
-library(readr)
 library(tools)
 library(stringr)
-library(magrittr)
-library(reshape2)
-library(reshape)
 library(tidyverse)
-library(tidyr)
 library(terra)
-
-#install.packages("devtools")
-#devtools:::install_github("gearslaboratory/gdalUtils")
-
-#install.packages("remotes")
-#remotes::install_github("RichardLemoine/LSTtools")
-#library(LSTools)
-
-#getRGISToolsOpt("EE.DataSets")
 
 setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Image_Processing")
 
 ##########################################################################################################################################################
-# OPENING TAR FILES. *** run once***
+# 1. OPENING TAR FILES. *** run once***
 ##########################################################################################################################################################
 
 # BULK DOWNLOAD FROM EARTH EXPLORER
@@ -56,12 +42,12 @@ LStif <- "./LS_tif"
 
 # SELECT .TAR FILES
 # make a list of all the .tar files
-all_tars <- list_files_with_exts(bulk, "tar") 
+all_tars <- list.files(bulk, pattern="tar") 
 # just the surface reflectance (SR) ones
 SR.tar <- list.files(bulk, pattern = glob2rx("*_SR*.tar$"), full.names = TRUE)
 
 # LOOP TO UNTAR FILES 
-setwd(bulk)
+
 for (tar in SR.tar){
   setwd(bulk)
   print(tar)
@@ -69,20 +55,20 @@ for (tar in SR.tar){
 }
 
 ##########################################################################################################################################################
-# IMAGE PROCESSING
+# 2. IMAGE PROCESSING
 ##########################################################################################################################################################
 
 # SET UP THE ENVIRONMENT  
 # Pull out tifs from new directory 
-#setwd("/Volumes/inwedata/Malone Lab/ENP Fire/Grace_McLeod/Image_Processing/LS_tif") 
+setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Image_Processing") 
 LStif <- "./LS_tif"
 # make a list of all the .tif files
-all_tifs <- list_files_with_exts(LStif, "TIF") 
+all_tifs <- list.files(LStif, pattern = "TIF") 
 # Load upland sample points 
 #setwd("/Volumes/inwedata/Malone Lab/ENP Fire/Grace_McLeod/Sampling")
-Smpl_pts <- rgdal::readOGR(dsn = "/Volumes/inwedata/Malone Lab/ENP Fire/Grace_McLeod/Sampling", layer = "Sample_pts_upland")
+Smpl_pts <- sf::st_read(dsn = "/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Sampling", layer = "Sample_pts_upland")
 # set crs to match landsat
-Smpl_pts <- spTransform(Smpl_pts, crs("+proj=aea +lat_0=23 +lon_0=-96 +lat_1=29.5 +lat_2=45.5 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"))
+Smpl_pts <- st_transform(Smpl_pts, crs("+proj=aea +lat_0=23 +lon_0=-96 +lat_1=29.5 +lat_2=45.5 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"))
 
 
 # TILE 26_18.............................................................................................................................................................
@@ -94,7 +80,7 @@ system.time(stack_26_18 <- stack(tile_26_18))
 test1 <- subset(stack_26_18, 1)
 Sub_pts_2618 <- st_as_sf(crop(vect(Smpl_pts),  ext(test1)))
 # extract to tile sample points
-system.time(Ext_26_18_sp <- raster::extract(stack_26_18, Sub_pts_2618, method= "simple", buffer=NULL, df=TRUE, sp=TRUE, factors=TRUE))
+system.time(Ext_26_18_sp <- terra::extract(stack_26_18, Sub_pts_2618, method= "simple", buffer=NULL, df=TRUE, sp=TRUE, factors=TRUE))
 Ext_26_18_df <- as.data.frame (Ext_26_18_sp)
 
 # SUBSET DATAFRAME (to avoid exhausting vector memory)
@@ -366,7 +352,7 @@ rm(list=ls())
 
 
 ##########################################################################################################################################################
-# DATAFRAME INTEGRATION
+# 3. DATAFRAME INTEGRATION
 ##########################################################################################################################################################
 # if wd not already set
 setwd("/Volumes/inwedata/Malone Lab/ENP Fire/Grace_McLeod/Image_Processing/Master_Spec")

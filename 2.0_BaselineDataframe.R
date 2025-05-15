@@ -1,16 +1,11 @@
-# Build Baseline dataframe:
-
-# Baseline MODEL
+# Baseline Dataframe
 # M.Grace McLeod (2023)
 
-# This script 
-# 1. Extracts spectral, fire history, and seasonal condition data to Baseline sample points
-# 2. Runs Random Forest models to determine variable importance
-# 3. Fits a Baseline model 
-
-# Uses OG sampling design, but updated filtering and only for pinelands
-# START AT "FORMAT DATA FOR RANDOM FORESTS" STEP
-setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod")
+# This script merges
+# 1. spectral ("BL_Spec.RDATA"), 
+# 2. seasonal condition ("BL_DAYMET.RDATA"), 
+# 3. fire history ("BL_FireHist.RDATA") data to Baseline sample points.
+# 4. Integrates all data into a Master dataframe ("BL_Master_df.RDATA")
 
 rm(list=ls())
 
@@ -38,34 +33,33 @@ library(splitstackshape)
 library(corrplot)
 library(cowplot)
 library(viridis)
-library(sf)
+library(terra)
 
+# Set working directory
+setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod")
 
 # load upland sample points
-BL_smpl_pts <- read_sf("Sampling/BL_smpl_pts.shp")
+BL_smpl_pts <- rgdal::readOGR(dsn = "./Sampling", layer = "BL_smpl_pts")
 BL_df <- as.data.frame(BL_smpl_pts)
 
+
 ##########################################################################################################################################################
-# SPECTRAL OBSERVATIONS 
+# 1. SPECTRAL OBSERVATIONS 
 ##########################################################################################################################################################
 
-# load Spec_Master
-load("Image_Processing/Master_Spec/Spec_Master.RDATA")
+# load spectral master dataframe
+load("./Image_Processing/Master_Spec/Spec_Master.RDATA")
 
-# SUBSET SPEC DATA TO JUST Baseline SAMPLE POINTS and SAMPLE PERIOD.........................................................................................
+# SUBSET DATA TO JUST BASELINE SAMPLE POINTS and SAMPLE PERIOD.........................................................................................
 # Format date to get year
 Spec_Master$Obs_Date <- as.Date(Spec_Master$Obs_Date, format= "%Y%m%d")
 Spec_Master$Obs_Year <- format(Spec_Master$Obs_Date, "%Y")
 Spec_Master$Obs_month <- format(Spec_Master$Obs_Date, "%m")
-
 # Subset to 2010-2020
 Spec_Master$Obs_Year <- as.numeric(Spec_Master$Obs_Year)
-BL_Spec <- Spec_Master %>% filter(Obs_Year >= 2010)
-
+BL_Spec <- Spec_Master[which(Spec_Master$Obs_Year >= 2010),]
 # Keep only rows with point ID that matches BL_Smpl_pts
 BL_Spec  <- filter(BL_Spec, ptID %in% BL_df$ptID)
-
-length(unique(BL_Spec$ptID)) # check it
 
 # BAND MIN AND MAX CALUCULATIONS.........................................................................................................................
 # Band Max per pt
@@ -109,23 +103,12 @@ for (i in unique(BL_Spec$ptID)){
 BL_Spec$NIR.SWIR1 <-   BL_Spec$Pt.B4max /   BL_Spec$Pt.B5max
 BL_Spec$SWIR1.SWIR2 <-   BL_Spec$Pt.B5max /   BL_Spec$Pt.B7max
 
-
-# ADDITIONAL INDICIES ..........................................................................................................................................
-# EVI = 2.5 * ((Band 4 – Band 3) / (Band 4 + 6 * Band 3 – 7.5 * Band 1 + 1))
-BL_Spec$EVI <- 2.5 * ((BL_Spec$B4 - BL_Spec$B3) / (BL_Spec$B4 + 6 * BL_Spec$B3 - 7.5 * BL_Spec$B1 + 1))
-# SAVI = ((Band 4 – Band 3) / (Band 4 + Band 3 + 0.5)) * (1.5)
-BL_Spec$SAVI <- ((BL_Spec$B4 - BL_Spec$B3) / (BL_Spec$B4 + BL_Spec$B3 + 0.5)) * (1.5)
-
-
 # save DF
 setwd("./Baseline")
 save(BL_Spec, file="BL_Spec.RDATA")
-#write_scv(BL_Spec, "BL_Spec.csv")
-
-rm(list=ls())
 
 ##########################################################################################################################################################
-# SEASONAL CONDITION DATA
+# 2. SEASONAL CONDITION DATA
 ##########################################################################################################################################################
 setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod")
 
@@ -136,10 +119,7 @@ tmax_EVG <- stack("./Seasonal_Cond/tmax_EVG.tif")
 precip_EVG <- stack("./Seasonal_Cond/precip_EVG.tif")
 
 # SEASONAL CONDITION SAMPLE POINTS
-# load Baseline sample points
-setwd("./Sampling")
-BL_smpl_pts <- rgdal::readOGR(dsn = ".", layer = "BL_smpl_pts")
-# make a copy for seasonal conditions
+# make a copy of sample points for seasonal conditions
 SeasonalCond_sp <- BL_smpl_pts
 # check crs'
 crs(SeasonalCond_sp)
@@ -220,18 +200,15 @@ BL_precip$variable <- NULL
 
 
 # MERGE DAYMET DATAFRAMES............................................................................................................................
-# use join() instead of merge() because it's much faster with large dfs
 # could use any join type for this because number of observations are the same for all dfs. 
 BL_DAYMET = full_join(BL_tmin, BL_tmax, by=c("ptID",  "coords.x1", "coords.x2", "Obs_Year", "Obs_month"), keep=FALSE) 
 BL_DAYMET = full_join(BL_DAYMET, BL_precip, by=c("ptID", "coords.x1", "coords.x2", "Obs_Year", "Obs_month"), keep=FALSE) 
 # save DF
 setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Baseline")
 save(BL_DAYMET, file="BL_DAYMET.RDATA")
-#write.csv(BL_DAYMET, file="BL_DAYMET.csv")
-rm(list=ls())
 
 ##########################################################################################################################################################
-# FIRE HISTORY DATA
+# 3. FIRE HISTORY DATA
 ##########################################################################################################################################################
 setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod")
 
@@ -239,19 +216,16 @@ setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod")
 # FIRE HISTORY METRICS........................................................................................................................................
 
 # load Recovery sample points
-BL_smpl_pts <- rgdal::readOGR(dsn = "./Sampling", layer = "BL_smpl_pts")
+BL_smpl_pts <- st_read("./Sampling/BL_smpl_pts.shp")
 # make a copy for fire history
 Fire_Histry_sp <- BL_smpl_pts
 
 # TOTAL FIRES
 # total number of fires experienced by the point prior to AND including the recovery fire
 load("./Fire_History/FireHistory_df.RDATA")
-names(FireHistory_df)
 # Keep only rows with point ID that matches BL_Smpl_pts
-Fire_Histry_sp <- spTransform(Fire_Histry_sp, crs("+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"))
+Fire_Histry_sp <- st_transform(Fire_Histry_sp, crs = 32617)  # UTM Zone 17N (WGS84). "+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"
 Fire_Histry_sp <- as.data.frame(Fire_Histry_sp)
-summary(Fire_Histry_sp$coords.x1)
-summary(FireHistory_df$coords.x1)
 BL_Frequency  <- filter(FireHistory_df, ptID %in% Fire_Histry_sp$ptID)
 # make fire history dataframe
 BL_FireHistory <- BL_Frequency %>% dplyr::select(ptID, coords.x1, coords.x2)
@@ -307,15 +281,12 @@ BL_FireNA$EVG_.2009[BL_FireNA$LFY == 2009] <- NA
 # Penultimate fire year is new max
 names(BL_FireNA)
 BL_FireYear$PenUltFY <- apply(BL_FireNA[3:35], 1, max, na.rm=TRUE)
-# check it
-view(BL_FireYear)
 # add to BL_FireHistory
 BL_FireHistory$LFY <- BL_FireYear$LFY
 BL_FireHistory$PenUltFY <- BL_FireYear$PenUltFY
 BL_FireHistory$Prev.Int <- BL_FireHistory$LFY - BL_FireHistory$PenUltFY
 # convert inf to NA 
 BL_FireHistory[sapply(BL_FireHistory, is.infinite)] <- NA
-
 
 # save DF
 setwd("./Baseline")
@@ -325,81 +296,8 @@ write_csv(BL_FireHistory, file="BL_FireHist.csv")
 rm(list=ls())
 
 
-
-
-
-
-
-
-
-
-
-# FIRE HISTORY SAMPLE POINTS
-# load Baseline sample points
-setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod")
-BL_smpl_pts <- rgdal::readOGR(dsn = "./Sampling", layer = "BL_smpl_pts")
-BL_df <- as.data.frame(BL_smpl_pts)
-# make a copy for seasonal conditions
-FireHistory_sp <- BL_smpl_pts
-
-# LOAD FIRE HISTORY DATA
-# time since fire
-tsf <- "./Fire_History/FH_layers/TSF_BL.tif"
-TSF_BL <- stack(tsf)
-# freq 1978-2009
-freq <- "./Fire_History/FH_layers/Freq_1978_2009.tif"
-Freq1978_2009 <- raster(freq)
-
-
-
-# EXTRACT FIRE HISTORY DATA TO SAMPLE POINTS...................................................................................................................
-# TSF stack 
-# format layer names for TSF
-yrs <- 2010:2020
-yr <- as.Date(as.character(yrs), format = "%Y")
-y <- year(yr)
-names(TSF_BL) <- paste("tsf", y)
-
-# extract raster data to BL sample points
-FireHistory_sp <- raster::extract(Freq1978_2009, FireHistory_sp, method= "simple", buffer=NULL, df=TRUE, sp=TRUE, factors=TRUE)
-FireHistory_sp <- raster::extract(TSF_BL,  FireHistory_sp, method= "simple", buffer=NULL, df=TRUE, sp=TRUE, factors=TRUE)
-# convert to dataframe
-BL_FireHistory <- as.data.frame(FireHistory_sp)
-
-# format columns
-colnames(BL_FireHistory)[3] <- "TotalFires" 
-# melt TSF columns and create Obs_Year variable
-BL_FireHistory <- melt(BL_FireHistory, na.rm=FALSE, value.name="TSF", id=c("ptID", "TotalFires", "coords.x1", "coords.x2"))
-colnames(BL_FireHistory)[colnames(BL_FireHistory) == "value"] <- "TSF" 
-BL_FireHistory$variable <- as.character(BL_FireHistory$variable) 
-BL_FireHistory<- BL_FireHistory%>%
-  transform(variable=str_replace(variable,"tsf.",""))
-colnames(BL_FireHistory)[colnames(BL_FireHistory) == "variable"] <- "Obs_Year" 
-
-
-# PREVIOUS INTERVAL
-# load BL_FireYears
-BL_FireYears <- read_csv("./Fire_History/FH_layers/BL_FireYears.csv")
-# match points to BL_FireHistory
-BL_FireYears <- BL_FireYears[BL_FireYears$ptID %in% BL_FireHistory$ptID,]
-# merge
-head(BL_FireHistory)
-head(BL_FireYears)
-BL_FireYears <- as.data.frame(BL_FireYears)
-BL_FireYears[sapply(BL_FireYears, is.infinite)] <- NA
-BL_FireHistory <- merge(BL_FireHistory, BL_FireYears, by=c("ptID"))
-# calculate Prev.Int
-BL_FireHistory$Prev.Int <- BL_FireHistory$LFYear - BL_FireHistory$PFYear
-
-# save DF
-setwd("./Baseline")
-save(BL_FireHistory, file="BL_FireHist.RDATA")
-#write_csv(BL_FireHistory, file="BL_FireHist.csv")
-
-rm(list=ls())
-
 ##########################################################################################################################################################
-# Baseline DATAFRAME INTEGRATION  
+# 4. Baseline DATAFRAME INTEGRATION  
 ##########################################################################################################################################################
 setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod")
 
@@ -415,13 +313,9 @@ BL_Master_df <- merge(BL_Spec, BL_DAYMET, by=c("ptID", "Obs_Year", "Obs_month"))
 # Merge FireHistory wiht Master
 BL_FireHistory$coords.x1 <- NULL ; BL_FireHistory$coords.x2 <- NULL # remove coords from FireHistory
 BL_Master_df <- merge(BL_Master_df, BL_FireHistory, by=c("ptID"))
-# check it
-head(BL_Master_df)
 
 # plot trends
 BL_Master_df$TotalFires <- as.factor(BL_Master_df$TotalFires)
-head(BL_Master_df)
-length(unique(BL_Master_df$ptID[BL_Master_df$TotalFires == 8]))
 ggplot(BL_Master_df) +
   geom_jitter(aes(x=Obs_Year, y=NDVI, group=TotalFires, color=TotalFires))+
   geom_smooth(aes(x=Obs_Year, y=NDVI, group=TotalFires, color=TotalFires)) 

@@ -2,7 +2,7 @@
 # M. Grace McLeod (2024)
 
 
-# This script summarizes the fire history and climate patterns for the landscape
+# This script summarizes the (1) fire history and (2) climate patterns for the landscape
 # across pineland communitites during the study period. 
 
 
@@ -23,10 +23,10 @@ rm(list=ls())
 setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod")
 
 ##############################################################################################################################
-# FIRE HISTORY BY VEG TYPE
+# 1. FIRE HISTORY BY VEG TYPE
 ##############################################################################################################################
 
-projcrs="+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"
+# projcrs="+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"
 
 
 # MASTER DATAFRAME........................................................................................................
@@ -177,80 +177,11 @@ Fire_by_veg_sp <- st_as_sf(x=Fire_by_veg,
 st_write(Fire_by_veg_sp, "./Landscape_Summery", layer="Fire_by_veg_sp.shp", driver="ESRI Shapefile")
 
 
-# TOTAL FIRES BY VEG CLASS................................................................................................
+# FIRE HISTORY BY VEG CLASS................................................................................................
 
 mean(Fire_by_veg$freq_1978_2020)
 sd(Fire_by_veg$freq_1978_2020)
 sd(Fire_by_veg$freq_1978_2020) / sqrt(length(Fire_by_veg$freq_1978_2020))
-
-# PLOTS
-# L3
-ggplot(Fire_by_veg) +
-         geom_boxplot( aes(x=L3_name, y=freq_1978_2020, color=L3_name))
-# L4
-ggplot(Fire_by_veg, aes(x=L4_name, y=freq_1978_2020, color=L4_name)) +
-  geom_violin()
-unique(Fire_by_veg$L4_name)
-# L5
-ggplot(Fire_by_veg, aes(x=L5_name, y=freq_1978_2020, color=L5_name)) +
-  geom_boxplot()
-# L6
-ggplot(Fire_by_veg, aes(x=L6_name, y=freq_1978_2020, color=L6_name)) +
-  geom_boxplot()
-# L7
-ggplot(Fire_by_veg, aes(x=DomCom, y=freq_1978_2020, color=DomCom)) +
-  geom_boxplot() +
-  scale_color_manual(values = c("#611f5d", "#a02d54","#bb292c","#f08736", "#ffb142", "#8c8b99"))+
-  #facet_wrap(~EcoSys,  ncol=2) +
-  theme_bw() 
-ggplot(Fire_by_veg, aes(x=L7_name, y=freq_1978_2020, fill= EcoSys)) +
-  geom_boxplot(alpha = 0.7, color="#611f5d") +
-  scale_fill_manual(values = c("#611f5d","#bb292c","#f08736", "#ffb142"))+
-  theme_bw() +
-  theme(text=element_text(size=15), axis.text.x = element_text(angle = 90, hjust = 1)) +
-  labs(
-    x = "Dominant Community",
-    y = "Total Fires",
-    fill = "Ecosystem Type"
-  )
-ggplot(Fire_by_veg, aes(x=DomCom, y=freq_1978_2020, fill= DomCom)) +
-  geom_boxplot(alpha = 0.7, color="#611f5d") +
-  scale_fill_manual(values = c("#611f5d", "#a02d54","#bb292c","#f08736", "#ffb142", "#8c8b99"))+
-  facet_wrap(~EcoSys,  ncol=2) +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  text = element_text(size=20) +
-  labs(
-    x = "Dominant Community",
-    y = "Total Fires",
-    fill = "Dominant Community"
-  )
-# regional 
-ggplot(Fire_by_veg, aes(x=DomCom, y=freq_1978_2020, fill= Regional_VegCat)) +
-  geom_boxplot(alpha = 0.7, color="#611f5d") +
-  scale_fill_manual(values = c("#611f5d", "#f08736"))+
-  theme_bw() +
-  theme(text=element_text(size=15), axis.text.x = element_text(angle = 90, hjust = 1)) +
-  labs(
-    x = "Dominant Community",
-    y = "Total Fires",
-    fill = "Ecosystem Type"
-  )
-
-# Try just seporating rocklands and other
-Fire_by_veg$rockland_flatwoods <- "Pine Flatwoods"
-Fire_by_veg$rockland_flatwoods[Fire_by_veg$L4_name == "Pine Rockland"] <- "Pine Rockland"
-# plot
-ggplot(Fire_by_veg, aes(x=DomCom, y=freq_1978_2020, fill= rockland_flatwoods)) +
-  geom_boxplot(alpha = 0.7, color="#611f5d") +
-  scale_fill_manual(values = c("#611f5d","#f08736"))+
-  theme_bw() +
-  theme(text=element_text(size=15), axis.text.x = element_text(angle = 90, hjust = 1)) +
-  labs(
-    x = "Dominant Community",
-    y = "Total Fires",
-    fill = "Ecosystem Type")
-
 
 # STATS 
 # means table
@@ -261,35 +192,7 @@ means_table <- Fire_by_veg %>%
 data_table <- describeBy(Fire_by_veg$freq_1978_2020, group=Fire_by_veg$EcoSys, fast=TRUE, digits = 2)
 data_table <- describeBy(Fire_by_veg$freq_1978_2020, group=Fire_by_veg$DomCom, fast=TRUE, digits = 2)
 
-
-# TIME SINCE FIRE BY VEG CLASS..............................................................................
-
 # PREVIOUS INTERVAL
-
-# L4
-ggplot(Fire_by_veg, aes(x=L4_name, y=Prev.Int, fill= EcoSys)) +
-  geom_boxplot(alpha = 0.7, color="#611f5d") +
-  scale_fill_manual(values = c("#611f5d","#bb292c","#f08736", "#ffb142"))+
-  theme_bw() +
-  theme(text=element_text(size=15), axis.text.x = element_text(angle = 90, hjust = 1)) +
-  labs(
-    x = "Ecosystem Type",
-    y = "Previous Interval",
-    fill = "Ecosystem Type"
-  )
-# L7
-ggplot(Fire_by_veg, aes(x=L7_name, y=Prev.Int, fill= EcoSys)) +
-  geom_boxplot(alpha = 0.7, color="#611f5d") +
-  scale_fill_manual(values = c("#611f5d","#bb292c","#f08736", "#ffb142"))+
-  theme_bw() +
-  theme(text=element_text(size=15), axis.text.x = element_text(angle = 90, hjust = 1)) +
-  labs(
-    x = "Dominant Community",
-    y = "Previous Interval",
-    fill = "Ecosystem Type"
-  )
-
-# STATS 
 # means table
 means_table <- Fire_by_veg %>%
   group_by(EcoSys) %>%
@@ -298,33 +201,7 @@ means_table <- Fire_by_veg %>%
 describeBy(Fire_by_veg$Prev.Int, group=Fire_by_veg$EcoSys, fast=TRUE, digits = 2)
 describeBy(Fire_by_veg$Prev.Int, group=Fire_by_veg$DomCom, fast=TRUE, digits = 2)
 
-
 # TIME SINCE FIRE 
-
-# L4
-ggplot(Fire_by_veg, aes(x=L4_name, y=TSF, fill= EcoSys)) +
-  geom_violin(alpha = 0.7, color="#611f5d") +
-  scale_fill_manual(values = c("#611f5d","#bb292c","#f08736", "#ffb142"))+
-  theme_bw() +
-  theme(text=element_text(size=15), axis.text.x = element_text(angle = 90, hjust = 1)) +
-  labs(
-    x = "Ecosystem Type",
-    y = "Time Since Fire",
-    fill = "Ecosystem Type"
-  )
-# L7
-ggplot(Fire_by_veg, aes(x=L7_name, y=TSF, fill= EcoSys)) +
-  geom_boxplot(alpha = 0.7, color="#611f5d") +
-  scale_fill_manual(values = c("#611f5d","#bb292c","#f08736", "#ffb142"))+
-  theme_bw() +
-  theme(text=element_text(size=15), axis.text.x = element_text(angle = 90, hjust = 1)) +
-  labs(
-    x = "Dominant Community",
-    y = "Time Since Fire",
-    fill = "Ecosystem Type"
-  )
-
-# STATS 
 summary(Fire_by_veg$TSF)
 # means table
 means_table <- Fire_by_veg %>%
@@ -335,186 +212,34 @@ describeBy(Fire_by_veg$TSF, group=Fire_by_veg$EcoSys, fast=TRUE, digits = 2)
 describeBy(Fire_by_veg$TSF, group=Fire_by_veg$DomCom, fast=TRUE, digits = 2)
 
 
-# UNBURNED BY VEG..............................................................................
+# UNBURNED 
 load("./Landscape_Summary/Landscape_Summary.RDATA")
-
 # Select unburned areas
 unburned <- Fire_by_veg[which(Fire_by_veg$freq_1978_2020 ==0),]
 0.0009 * 2859 # = 2.5731 km2
 
-# L4
-ggplot(unburned, aes(x=L4_name, fill=EcoSys)) +
-  geom_bar() +
-  scale_fill_manual(values = c("#611f5d","#bb292c","#f08736", "#ffb142"))+
-  theme_bw() +
-  theme(text=element_text(size=15), axis.text.x = element_text(angle = 90, hjust = 1)) +
-  labs(
-    x = "EcoSystem Type",
-    y = "Unburned Locations",
-    fill=NULL
-  )
 
-# L7
-ggplot(unburned, aes(x=L7_name, fill=EcoSys)) +
-  geom_bar() +
-  scale_fill_manual(values = c("#611f5d","#bb292c","#f08736", "#ffb142"))+
-  theme_bw() +
-  theme(text=element_text(size=15), axis.text.x = element_text(angle = 90, hjust = 1)) +
-  labs(
-    x = "Dominant Community",
-    y = "Unburned Locations",
-    fill= "Ecosystem Type"
-  )
-
-
-# FIRE TYPE BY VEG..............................................................................
-
+# FIRE TYPE 
 # load fire perimeters clipped to pinelands 
 Pine_fires_shp <- st_read("./Fire_History/Ecosyst_Clipped_Fires/Pine_fires_Km2.shp")
 head(Pine_fires_shp)
-
 # number of fires
 WF <- Pine_fires_shp[which(Pine_fires_shp$FireType =="WF"),]
 RX <- Pine_fires_shp[which(Pine_fires_shp$FireType =="RX"),]
 length(unique(WF$FireNumber))
 length(unique(RX$FireNumber))
-
 # annual burned area 
 sum(WF$Area_km2) # WF: sum= 693.4558
 mean(WF$Area_km2) # WF: mean= 0.606698
 sum(RX$Area_km2) # RX: sum= 1418.603
 mean(RX$Area_km2) # RX: mean= 1.61941
-annual_area <- ggplot(NoNA, aes(x=Year, y=Area_km2, fill=FireType)) +
-  geom_col(position="dodge")+
-  scale_fill_manual(values = c("#efc86d","#6f9969"))+
-  theme_bw() +
-  theme(text=element_text(size=20), 
-        legend.position="none") +
-  scale_x_discrete(breaks = c(1980, 1990, 2000, 2010, 2020))+
-  labs(
-    x = "Year",
-    y = "Burned Area (Km2)",
-    fill=" Fire Type",
-    tag="d"
-  )
-
-# annual number of fires
-annual_fires <- ggplot(NoNA, aes(x=Year, fill=FireType)) +
-  geom_bar(position="dodge")+
-  scale_fill_manual(values = c("#efc86d","#6f9969"))+
-  theme_bw() +
-  theme(text=element_text(size=20), 
-        legend.position="none") +
-  scale_x_discrete(breaks = c(1980, 1990, 2000, 2010, 2020))+
-  labs(
-    x = "Year",
-    y = "Number of Fires",
-    fill=" Fire Type",
-    tag="b"
-  )
-
-
-# seasonallity 
-class(Pine_fires_shp$StartDate)
-Pine_fires_shp$StartDate <- as.Date(Pine_fires_shp$StartDate, format= "%Y-%m-%d")
-Pine_fires_shp$FireMo <- format(Pine_fires_shp$StartDate,"%m")
-Pine_fires_shp$FireMo <- as.numeric(Pine_fires_shp$FireMo)
-NoNA <- Pine_fires_shp[which(Pine_fires_shp$FireType == "RX" | Pine_fires_shp$FireType == "WF"),]
-ggplot(NoNA, aes(x=FireMo, fill=FireType)) + # monthly totals
-  geom_bar(position="dodge") +
-  scale_fill_manual(values = c("#efc86d","#6f9969"))+
-  theme_bw() +
-  theme(text=element_text(size=15), 
-        legend.position="top") +
-  labs(
-    x = "Month",
-    y = "Number of Fires",
-    fill=" Fire Type"
-  )
-
-# mean monthly fires
-fires_summary <- NoNA %>% # monthly means
-  group_by(Year,FireMo, FireType) %>%
-  summarise(num_fires = n())
-average_fires <- fires_summary %>%
-  group_by(FireMo, FireType) %>%
-  summarise(avg_fires_per_month = mean(num_fires))
-average_fires$FireMo <- as.factor(average_fires$FireMo)
-average_fires <- average_fires[which(average_fires$FireMo != "NA"),]
-mean_monthly_fires <- ggplot(average_fires, aes(x=FireMo, y= avg_fires_per_month, fill=FireType)) +
-  geom_col(position="dodge") +
-  scale_fill_manual(values = c("#efc86d","#6f9969"))+
-  theme_bw() +
-  theme(text=element_text(size=20), 
-        legend.position="none") +
-  labs(
-    x = "Month",
-    y = "Mean Number of Fires",
-    fill=" Fire Type",
-    tag="a"
-  )
-
-# mean monthly area
-fires_summary <- NoNA %>% # monthly means
-  group_by(Year,FireMo, FireType) %>%
-  summarise(mean_area = mean(Area_km2))
-average_fires <- NoNA %>%
-  group_by(FireMo, FireType) %>%
-  summarise(avg_area_per_month = mean(Area_km2))
-average_fires$FireMo <- as.factor(average_fires$FireMo)
-average_fires <- average_fires[which(average_fires$FireMo != "NA"),]
-mean_monthly_area <- ggplot(average_fires, aes(x=FireMo, y= avg_area_per_month, fill=FireType)) +
-  geom_col(position="dodge") +
-  scale_fill_manual(values = c("#efc86d","#6f9969"))+
-  theme_bw() +
-  theme(text=element_text(size=20), 
-        legend.position="bottom") +
-  labs(
-    x = "Month",
-    y = "Mean Burned Area (Km2)",
-    fill=" Fire Type",
-    tag="c"
-  )
-
-
-
-# BIG PLOT
-(mean_monthly_fires + annual_fires) /( mean_monthly_area + annual_area)
-
-
-
-
-# L4
-ggplot(Fire_by_veg, aes(x=L4_name, y=freq_1978_2020, fill=FireType)) +
-  geom_boxplot() +
-  scale_fill_manual(values = c("#611f5d","#bb292c","#f08736", "#ffb142"))+
-  theme_bw() +
-  theme(text=element_text(size=15), axis.text.x = element_text(angle = 90, hjust = 1)) +
-  labs(
-    x = "EcoSystem Type",
-    y = "Total Fires",
-    fill=" Fire Type"
-  )
-
-# L7
-ggplot(Fire_by_veg, aes(x=L7_name, fill=EcoSys)) +
-  geom_bar() +
-  scale_fill_manual(values = c("#611f5d","#bb292c","#f08736", "#ffb142"))+
-  theme_bw() +
-  theme(text=element_text(size=15), axis.text.x = element_text(angle = 90, hjust = 1)) +
-  labs(
-    x = "Dominant Community",
-    y = "Unburned Locations",
-    fill= "Ecosystem Type"
-  )
-
 # data table (for means)
 describeBy(Fire_by_veg$freq_1978_2020, group=Fire_by_veg$EcoSys, fast=TRUE, digits = 2)
 describeBy(Fire_by_veg$freq_1978_2020, group=Fire_by_veg$DomCom, fast=TRUE, digits = 2)
 
 
 ############################################################################################################################
-# CLIMATE SUMMARIES
+# 2. CLIMATE SUMMARIES
 ############################################################################################################################
 
 # DAYMET..................................................................................................................
@@ -749,42 +474,6 @@ means_daymet <- Upland_DAYMET %>%
 means_daymet <- means_daymet %>% mutate_at(vars(2:4), funs(round(., 1)))
 means_daymet$Obs_Year <- as.numeric(means_daymet$Obs_Year)
 mean_pdsi$Obs_Year <- as.numeric(mean_pdsi$Obs_Year)
-
-# plot
-temp <- ggplot(means_daymet) +
-  geom_line(aes(x=Obs_Year, y=tmax), color="#a01300") +
-  geom_point(aes(x=Obs_Year, y=tmax), color="#a01300") +
-  geom_line(aes(x=Obs_Year, y=tmin), color="#0086a9") +
-  geom_point(aes(x=Obs_Year, y=tmin), color="#0086a9") +
-  #geom_text() +
-  scale_y_continuous(limits = c(15, 40)) +
-  theme_bw() +
-  theme(text=element_text(size=15)) +
-  labs(x="",
-       y="Air Temperature (C)",
-       tag="a")
-precip <- ggplot(means_daymet, aes(x=Obs_Year, y=precip)) +
-  geom_line() +
-  geom_point() +
-  scale_y_continuous(limits = c(50, 200)) +
-  theme_bw() +
-  theme(text=element_text(size=15)) +
-  labs(x="",
-       y="Precipitation (mm)",
-       tag="b") 
-pdsi <- ggplot(mean_pdsi, aes(x=Obs_Year, y=pdsi)) +
-  geom_line() +
-  geom_point() +
-  scale_y_continuous(limits = c(-4, 4)) +
-  theme_bw() +
-  theme(text=element_text(size=15)) +
-  labs(x="Year",
-       y="PDSI",
-       tag="c")
-
-
-temp / precip / pdsi
-
 
 # STATS
 tmax <- lm(means_daymet$tmax ~ means_daymet$Obs_Year)
