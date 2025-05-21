@@ -1,22 +1,34 @@
-#  SAMPLING DESIGN
+## --------------------------------------------- ##
+#                Sampling Design
+## --------------------------------------------- ##
+# Script author(s): Angel Chen
 
-# This script: 
-# 1. removes unburned locations ("Burned_smpl_pts.shp")
-# 2. selects recovery sample points based on fire history ("Recov_smpl_pts.shp")
-# 3. selects baseline sample points based on fire history ("BL_smpl_pts.shp")
+# Purpose:
+## This script:
+## 1. removes unburned locations ("Burned_smpl_pts.shp")
+## 2. selects recovery sample points based on fire history ("Recov_smpl_pts.shp")
+## 3. selects baseline sample points based on fire history ("BL_smpl_pts.shp")
+
+## --------------------------------------------- ##
+#               Housekeeping -----
+## --------------------------------------------- ##
 
 rm(list=ls())
 
-library(tidyverse)
-library(sf)
-library(terra)
+# Load necessary libraries
+# If you don't have the "librarian" package, uncomment the next line and run it to install the package
+# install.packages("librarian")
+librarian::shelf(tidyverse, sf, terra)
 
-dir <- file.path("/", "corellia.environment.yale.edu", "MaloneLab", "Research", "ENP", "ENP Fire", "Grace_McLeod") 
+# Point to the path in the server where the data is
+dir <- file.path("/", "Volumes", "MaloneLab", "Research", "ENP", "ENP Fire", "Grace_McLeod") 
 
 # Load fire history data 
 FireHistory_df <- read.csv(file.path(dir, "Fire_History", "FireHistory_df.csv"))
 
-# SUBSET SAMPLE POINTS ####
+## --------------------------------------------- ##
+#             Subset Sample Points -----
+## --------------------------------------------- ##
 
 # 1. BURNED POINTS: points that have burned at least once on record (1978-2020)
 Burned_pts_df <- FireHistory_df %>%
