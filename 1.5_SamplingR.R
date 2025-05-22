@@ -44,9 +44,9 @@ Burned_smpl_pts <- Burned_pts_df %>%
   dplyr::select(ptID, coords.x1, coords.x2) %>%
   # Convert back to spatial
   sf::st_as_sf(coords = c("coords.x1", "coords.x2"),
-               crs = terra::crs("+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"))
+               crs = "+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs")
 
-terra::crs(Burned_smpl_pts)
+sf::st_crs(Burned_smpl_pts)
 
 # Save
 sf::st_write(Burned_smpl_pts, dsn = "Sampling", layer = "Burned_smpl_pts", driver = "ESRI Shapefile", append = FALSE)
@@ -62,9 +62,9 @@ Recov_smpl_pts <- Recov_pts_df %>%
   dplyr::select(ptID, coords.x1, coords.x2) %>%
   # Convert back to spatial
   sf::st_as_sf(coords = c("coords.x1", "coords.x2"),
-               crs = terra::crs("+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"))
+               crs = "+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs")
 
-terra::crs(Recov_smpl_pts)
+sf::st_crs(Recov_smpl_pts)
 
 # Save 
 sf::st_write(Recov_smpl_pts, dsn = "Sampling", layer = "Recov_smpl_pts", driver = "ESRI Shapefile", append = FALSE)
@@ -82,9 +82,9 @@ BL_smpl_pts <- BL_pts_df %>%
   dplyr::select(ptID, coords.x1, coords.x2) %>%
   # Convert back to spatial
   sf::st_as_sf(coords = c("coords.x1", "coords.x2"),
-               crs = terra::crs("+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"))
+               crs = "+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs")
 
-terra::crs(BL_smpl_pts)
+sf::st_crs(BL_smpl_pts)
 
 # Save 
 sf::st_write(BL_smpl_pts, dsn = "Sampling", layer = "BL_smpl_pts", driver = "ESRI Shapefile", append = FALSE)
