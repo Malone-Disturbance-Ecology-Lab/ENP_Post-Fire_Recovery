@@ -1,28 +1,11 @@
-# DAYMENT METEROROLOGICAL DATA
-  # AUTHOR: M.GRACE MCLEOD (2022)
+## --------------------------------------------- ##
+#       Daymet Meterological Data (Part B)
+## --------------------------------------------- ##
+# Script author(s): Angel Chen
 
-
-# This script:
-  # 1. downloads monthly climate data from DAYMET 
-  # 2. stacks monthly layers and masks stacks to the Everglades boundary
-
-
-rm(list=ls())
-
-library(ncdf4)
-library(raster)
-library(rgdal)
-library(ggplot2)
-library(dplyr)  
-library(knitr) 
-library(markdown)
-library(rmarkdown)
-library(covr) 
-library(testthat)
-library(tools)
-library(FedData)
-library(daymetr) 
-library(terra)
+# Purpose:
+## This script:
+## 2. stacks monthly layers and masks stacks to the Everglades boundary
 
 # ADDITIONAL RESOURCES
 # https://daac.ornl.gov/DAYMET/guides/Daymet_V4_Monthly_Climatology.html
@@ -31,101 +14,99 @@ library(terra)
 # https://tmieno2.github.io/R-as-GIS-for-Economists/daymet-with-daymetr-and-feddata.html
 # https://cran.r-project.org/web/packages/daymetr/vignettes/daymetr-vignette.html
 
-setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Seasonal_Cond")
+## --------------------------------------------- ##
+#               Housekeeping -----
+## --------------------------------------------- ##
 
-##########################################################################################################################################################
-# 1. IMPORTING DATA. **** run once *****
-##########################################################################################################################################################
+rm(list=ls())
 
-# DOWNLOAD DAYMET GRIDED CLIMATE DATA..........................................................................................................
-# Monthly precip
-download_daymet_ncss( c(26.5, -81.75, 25, -80.25), 
-                      param= 'prcp', 
-                      start = 2000, end = 2020, 
-                      frequency = "monthly", 
-                      path = "./DAYMET_monthly_prcp")    
-# Monthly tmax
-download_daymet_ncss( c(26.5, -81.75, 25, -80.25), 
-                      param= 'tmax', 
-                      start = 2000, end = 2020, 
-                      frequency = "monthly", 
-                      path = "./DAYMET_monthly_tmax")    
-# Monthly tmin
-download_daymet_ncss( c(26.5, -81.75, 25, -80.25), 
-                      param= 'tmin', 
-                      start = 2000, end = 2020, 
-                      frequency = "monthly", 
-                      path = "./DAYMET_monthly_tmin") 
+# Load necessary libraries
+# If you don't have the "librarian" package, uncomment the next line and run it to install the package
+# install.packages("librarian")
+librarian::shelf(tidyverse, sf, terra)
 
+# Point to the seasonal conditions folder on server
+season_dir <- file.path("/", "Volumes", "MaloneLab", "Research", "ENP", "ENP Fire", "Grace_McLeod", "Seasonal_Cond") 
 
-##########################################################################################################################################################
-# 2. DATA PROCESSING 
-##########################################################################################################################################################
+## --------------------------------------------- ##
+#              Data Processing -----
+## --------------------------------------------- ##
 
 # LoadEVG boundary for masking
-EVGbound <- readOGR("/Volumes/inwedata/Malone Lab/ENP Fire/Grace_McLeod/AOI/EVG_bound.shp")
-# Change projection to match DAYMET data
-EVGbound <- spTransform(EVGbound, CRSobj = CRS("+proj=lcc +lat_1=25 +lat_2=60 +lat_0=42.5 +lon_0=-100 +x_0=0 +y_0=0 +ellps=WGS84 +units=km +no_defs"))
+EVGbound <- sf::st_read(file.path("/", "Volumes", "MaloneLab", "Research", "ENP", "ENP Fire", "Grace_McLeod", "AOI", "EVG_bound.shp")) %>%
+  # Change projection to match Daymet data
+  sf::st_transform("+proj=lcc +lat_1=25 +lat_2=60 +lat_0=42.5 +lon_0=-100 +x_0=0 +y_0=0 +ellps=WGS84 +units=km +no_defs")
 
-# PRECIPITATION .........................................................................................................
-# load files
-precip.files <- dir("./DAYMET_monthly_prcp", "*_ncss.nc$")
-precip.files<- list_files_with_exts("./DAYMET_monthly_prcp", "nc")
-# stack
-precip_stack <- stack(precip.files)
-# change projections
-raster::projection(precip_stack) <- "+proj=lcc +lat_1=25 +lat_2=60 +lat_0=42.5 +lon_0=-100 +x_0=0 +y_0=0 +ellps=WGS84 +units=km +no_defs"
-# mask to EVGbound
-precip_EVG <- mask(precip_stack, EVGbound)
-# check it
-sub1 <- subset(precip_EVG, 1)
+# Precipitation ------------------------------------
+
+# Load files
+precip.files <- as.list(dir(file.path(season_dir, "DAYMET_monthly_prcp"), "*_ncss.nc$", full.names = T))
+
+# Read in rasters
+precip_rasters <- precip.files %>%
+  purrr::map(.f = ~terra::rast(.))
+
+# Stack rasters
+precip_stack <- terra::rast(precip_rasters) %>%
+  terra::project("+proj=lcc +lat_1=25 +lat_2=60 +lat_0=42.5 +lon_0=-100 +x_0=0 +y_0=0 +ellps=WGS84 +units=km +no_defs")
+
+# Mask to EVGbound
+precip_EVG <- terra::mask(precip_stack, EVGbound)
+
+# Check it
+sub1 <- terra::subset(precip_EVG, 1)
 plot(sub1) 
 plot(EVGbound, add=TRUE)
-# save 
-#setwd("/Volumes/inwedata/Malone Lab/ENP Fire/Grace_McLeod/Seasonal_Cond")
-writeRaster(precip_EVG, "precip_EVG.tif", overwrite=TRUE)
 
+# Save 
+terra::writeRaster(precip_EVG, "precip_EVG.tif", overwrite = TRUE)
 
-# MAX TEMPERATURE.........................................................................................................
-# load files
-tmax.files <- dir("./DAYMET_monthly_tmax", "*_ncss.nc$")
-tmax.files<- list_files_with_exts("./DAYMET_monthly_tmax", "nc")
-# stack
-tmax_stack <- stack(tmax.files)
-# change projections
-raster::projection(tmax_stack) <- "+proj=lcc +lat_1=25 +lat_2=60 +lat_0=42.5 +lon_0=-100 +x_0=0 +y_0=0 +ellps=WGS84 +units=km +no_defs"
-# mask to EVGbound
-tmax_EVG <- mask(tmax_stack, EVGbound)
-# check it
-sub1 <- subset(tmax_EVG, 1)
+# Max Temperature ------------------------------------
+# Load files
+tmax.files <- as.list(dir(file.path(season_dir, "DAYMET_monthly_tmax"), "*_ncss.nc$", full.names = T))
+
+# Read in rasters
+tmax_rasters <- tmax.files %>%
+  purrr::map(.f = ~terra::rast(.))
+
+# Stack rasters
+tmax_stack <- terra::rast(tmax_rasters) %>%
+  # Change projection
+  terra::project("+proj=lcc +lat_1=25 +lat_2=60 +lat_0=42.5 +lon_0=-100 +x_0=0 +y_0=0 +ellps=WGS84 +units=km +no_defs")
+
+# Mask to EVGbound
+tmax_EVG <- terra::mask(tmax_stack, EVGbound)
+
+# Check it
+sub1 <- terra::subset(tmax_EVG, 1)
 plot(sub1) 
 plot(EVGbound, add=TRUE)
-# save 
-#setwd("/Volumes/inwedata/Malone Lab/ENP Fire/Grace_McLeod/Seasonal_Cond")
-writeRaster(tmax_EVG, "tmax_EVG.tif", overwrite=TRUE)
 
+# Save 
+terra::writeRaster(tmax_EVG, "tmax_EVG.tif", overwrite = TRUE)
 
-# MIN TEMPERATURE.........................................................................................................
-# load files
-tmin.files <- dir("./DAYMET_monthly_tmin", "*_ncss.nc$")
-tmin.files<- list_files_with_exts("./DAYMET_monthly_tmin", "nc")
-# stack
-tmin_stack <- stack(tmin.files)
-# change projections
-raster::projection(tmin_stack) <- "+proj=lcc +lat_1=25 +lat_2=60 +lat_0=42.5 +lon_0=-100 +x_0=0 +y_0=0 +ellps=WGS84 +units=km +no_defs"
-# mask to EVGbound
-tmin_EVG <- mask(tmin_stack, EVGbound)
-# check it
-sub1 <- subset(tmin_EVG, 1)
+# Min Temperature ------------------------------------
+
+# Load files
+tmin.files <- as.list(dir(file.path(season_dir, "DAYMET_monthly_tmin"), "*_ncss.nc$", full.names = T))
+
+# Read in rasters
+tmin_rasters <- tmin.files %>%
+  purrr::map(.f = ~terra::rast(.))
+
+# Stack rasters
+tmin_stack <- terra::rast(tmin_rasters) %>%
+  # Change projection
+  terra::project("+proj=lcc +lat_1=25 +lat_2=60 +lat_0=42.5 +lon_0=-100 +x_0=0 +y_0=0 +ellps=WGS84 +units=km +no_defs")
+
+# Mask to EVGbound
+tmin_EVG <- terra::mask(tmin_stack, EVGbound)
+
+# Check it
+sub1 <- terra::subset(tmin_EVG, 1)
 plot(sub1) 
 plot(EVGbound, add=TRUE)
-# save 
-#setwd("/Volumes/inwedata/Malone Lab/ENP Fire/Grace_McLeod/Seasonal_Cond")
-writeRaster(tmin_EVG, "tmin_EVG.tif", overwrite=TRUE)
 
+# Save 
+terra::writeRaster(tmin_EVG, "tmin_EVG.tif", overwrite = TRUE)
 
-# SAVE .RDATA..............................................................................................................................
-# setwd("/Volumes/inwedata/Malone Lab/ENP Fire/Grace_McLeod/Seasonal_Cond")
-# save(precip_EVG, tmax_EVG, tmin_EVG, file="DAYMET.RDATA")
-
-citation("daymetr")
