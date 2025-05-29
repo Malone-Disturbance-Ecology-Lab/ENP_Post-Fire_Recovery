@@ -98,7 +98,6 @@ eBICY$Map_region <- eBICY_reg
 ENP_reg <- "EVER"
 ENP$Map_region <- ENP_reg
 
-
 eBICY %>% names
 eBICY %>% names
 ENP %>% names
@@ -122,6 +121,7 @@ Uplands <- VegAll[which(VegAll$L2_name== "Upland Shrubland"|
                           VegAll$L2_name== "Upland Scrub"|
                           VegAll$L2_name== "Upland Forest"|
                           VegAll$L2_name== "Upland Woodland"),]
+
 #check it
 Uplands_df <- as.data.frame(Uplands)
 plot(Uplands)
@@ -137,9 +137,12 @@ save(Uplands, file = 'Uplands_all.RDATA')
 unique(Uplands$L3_name)
 UpEco <- Uplands[which(Uplands$L3_name== "Pine Woodland"|
                          Uplands$L3_name== "Pine Upland"),]
+
+UpEco %>% summary
 # Assign a Pineland value
 UpEco$EcoType[UpEco$L3_name =="Pine Woodland"] <- "Pineland"
 UpEco$EcoType[UpEco$L3_name =="Pine Upland"] <- "Pineland"
+
 # Create new column and assign 1 for pine
   # numeric value will be used for rasterizing
 UpEco$value[UpEco$EcoType == "Pineland"] <- 1
@@ -198,10 +201,22 @@ Sample_pts$ptID <- 1:414124
 # Plot  
 plot(Sample_pts)
 
+# Need to add Ecotype into the sample points:
+UpEco.proj <- st_transform(UpEco, st_crs(Sample_pts) ) %>% select(EcoType) # Ecotype
+
+UpEco.proj_raster <- rasterize(UpEco.proj, Uplands_raster, field= "EcoType", background= NA)
+
+#Sample_pts_eco <- st_intersections( Sample_pts, UpEco.proj) # Extract information
+
+EcoType.xy <- terra::extract( UpEco.proj_raster, Sample_pts, xy=T)
+
+Sample_pts_eco <- cbind(Sample_pts,EcoType.xy[, c(2:4)]) %>% rename(coords.x1 = x , coords.x2 = y )
+
 # SAVE UPLAND POINTS
 # pinelands only
-setwd("/Volumes/inwedata/Malone Lab/ENP Fire/Grace_McLeod/Sampling")
-st_write(Sample_pts, dsn=".", layer="Sample_pts_upland", driver="ESRI Shapefile", overwrite=TRUE)
+setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Sampling")
+
+st_write(Sample_pts_eco, dsn=".", layer="Sample_pts_upland_052925", driver="ESRI Shapefile", overwrite=TRUE)
 
 
 
