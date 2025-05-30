@@ -59,7 +59,7 @@ plot(sub1)
 plot(EVGbound, add=TRUE)
 
 # Save 
-terra::writeRaster(precip_EVG, "precip_EVG.tif", overwrite = TRUE)
+terra::writeRaster(precip_EVG, file.path(season_dir, "precip_EVG_updated.tif"), overwrite = TRUE)
 
 # Max Temperature ------------------------------------
 # Load files
@@ -83,7 +83,7 @@ plot(sub1)
 plot(EVGbound, add=TRUE)
 
 # Save 
-terra::writeRaster(tmax_EVG, "tmax_EVG.tif", overwrite = TRUE)
+terra::writeRaster(tmax_EVG, file.path(season_dir, "tmax_EVG_updated.tif"), overwrite = TRUE)
 
 # Min Temperature ------------------------------------
 
@@ -108,5 +108,5 @@ plot(sub1)
 plot(EVGbound, add=TRUE)
 
 # Save 
-terra::writeRaster(tmin_EVG, "tmin_EVG.tif", overwrite = TRUE)
+terra::writeRaster(tmin_EVG, file.path(season_dir, "tmin_EVG_updated.tif"), overwrite = TRUE)
 

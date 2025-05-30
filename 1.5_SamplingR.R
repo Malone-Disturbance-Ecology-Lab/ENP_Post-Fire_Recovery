@@ -49,7 +49,7 @@ Burned_smpl_pts <- Burned_pts_df %>%
 sf::st_crs(Burned_smpl_pts)
 
 # Save
-sf::st_write(Burned_smpl_pts, dsn = "Sampling", layer = "Burned_smpl_pts", driver = "ESRI Shapefile", append = FALSE)
+sf::st_write(Burned_smpl_pts, dsn = file.path(dir, "Sampling"), layer = "Burned_smpl_pts_updated", driver = "ESRI Shapefile", append = FALSE)
 
 
 # 2. RECOVERY POINTS: pts that burned once during recovery window (2001-2007)
@@ -67,7 +67,7 @@ Recov_smpl_pts <- Recov_pts_df %>%
 sf::st_crs(Recov_smpl_pts)
 
 # Save 
-sf::st_write(Recov_smpl_pts, dsn = "Sampling", layer = "Recov_smpl_pts", driver = "ESRI Shapefile", append = FALSE)
+sf::st_write(Recov_smpl_pts, dsn = file.path(dir, "Sampling"), layer = "Recov_smpl_pts_updated", driver = "ESRI Shapefile", append = FALSE)
 
 
 # 3. BASELINE POINTS: pts that remain unburned from 2010-2020
@@ -87,5 +87,5 @@ BL_smpl_pts <- BL_pts_df %>%
 sf::st_crs(BL_smpl_pts)
 
 # Save 
-sf::st_write(BL_smpl_pts, dsn = "Sampling", layer = "BL_smpl_pts", driver = "ESRI Shapefile", append = FALSE)
+sf::st_write(BL_smpl_pts, dsn = file.path(dir, "Sampling"), layer = "BL_smpl_pts_updated", driver = "ESRI Shapefile", append = FALSE)
 
