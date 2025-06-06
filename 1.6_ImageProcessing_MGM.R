@@ -1,407 +1,605 @@
-# LANDSAT IMAGE PROCESSING
-# M.Grace McLeod (2022)
+## --------------------------------------------- ##
+#       Landsat Image Processing (Part B)
+## --------------------------------------------- ##
+# Script author(s): Angel Chen
 
+# Purpose:
+## This script does the following steps to process images for 4 ARD Landsat tiles covering the Everglades
 
-# this script does the following steps to process images for 4 ARD Landsat tiles covering the Everglades
+## Images were downloaded manually from Earth Explorer: https://earthexplorer.usgs.gov/
 
-# Images were downloaded manually from Earth Explorer:  https://earthexplorer.usgs.gov/
+## 2. extracts spectral data from tile-specific stacks to upland sample points and filters data for clouds and QAQC
+## 3. merges all tile-specific dataframes to make a Spectral Master dataframe and calculates spectral indices ("Spec_Master.RDATA")
 
-# 1. open tar files and saves Landsat .tif image 
-# 2. extracts spectral data from tile-specific stacks to upland sample points and filters data for clouds and QAQC
-# 3. merges all tile-specific dataframes to make a Spectral Master dataframe and calculates spectral indicies ("Spec_Master.RDATA")
+## --------------------------------------------- ##
+#               Housekeeping -----
+## --------------------------------------------- ##
 
+# Load necessary libraries
+# If you don't have the "librarian" package, uncomment the next line and run it to install the package
+# install.packages("librarian")
+librarian::shelf(sf, tidyverse, terra)
 
-rm(list=ls())
+## --------------------------------------------- ##
+#             Image Processing -----
+## --------------------------------------------- ##
+# Pull out tifs from new directory 
+image_dir <- file.path("/", "Volumes", "MaloneLab", "Research", "ENP", "ENP Fire", "Grace_McLeod", "Image_Processing") 
+LStif <-  file.path(image_dir, "LS_tif")
 
-library(landsat)
-library(sp)
-library(fields)
-library(RGISTools)
-library(remotes)
-library(tools)
-library(stringr)
-library(tidyverse)
-library(terra)
+# Load upland sample points 
+Smpl_pts <- terra::vect(file.path("/", "Volumes", "MaloneLab", "Research", "ENP", "ENP Fire", "Grace_McLeod", "Sampling", "Sample_pts_upland_052925.shp"))
 
-setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Image_Processing")
+# Tile 26_18 ------------------------------------------------------
 
-##########################################################################################################################################################
-# 1. OPENING TAR FILES. *** run once***
-##########################################################################################################################################################
+# Group by tile
+tile_26_18 <- as.list(list.files(LStif, pattern = glob2rx("*_026018*.TIF$"), full.names = TRUE))
 
-# BULK DOWNLOAD FROM EARTH EXPLORER
-# download completed in chunks. Run on each 
-bulk <- "./BulkDownload/BulkDownLoad_2000_2005"
-#bulk <- "./BulkDownload/BulkDownLoad_2006_2009"
-#bulk <- "./BulkDownload/BulkDownLoad_2010_2012"
-#bulk <- "./BulkDownload/BulkDownLoad_2013_2015"
-#bulk <- "./BulkDownload/BulkDownLoad_2016_2020"
+# Read in rasters as a list
+rast_tile_26_18 <- tile_26_18 %>%
+  purrr::map(.f = ~terra::rast(.), .progress = T)
 
-# creat path to store tif files
-LStif <- "./LS_tif"
+# Stack them
+stack_26_18 <- terra::rast(rast_tile_26_18)
 
-# SELECT .TAR FILES
-# make a list of all the .tar files
-all_tars <- list.files(bulk, pattern="tar") 
-# just the surface reflectance (SR) ones
-SR.tar <- list.files(bulk, pattern = glob2rx("*_SR*.tar$"), full.names = TRUE)
+# Make sure sample points have the same crs as the rasters
+Smpl_pts_26_18 <- Smpl_pts %>%
+  terra::project(terra::crs(stack_26_18))
 
-# LOOP TO UNTAR FILES 
+# Subset sample points to tile
+Sub_pts_26_18 <- terra::crop(Smpl_pts_26_18, terra::ext(stack_26_18))
 
-for (tar in SR.tar){
-  setwd(bulk)
-  print(tar)
-  LStifs <- untar(tar, list=FALSE, exdir = LStif) 
+# Extract to tile sample points
+# Takes a while (30 mins)
+Ext_26_18_df <- terra::extract(stack_26_18, Sub_pts_26_18, xy = TRUE, ID = FALSE)
+
+# Combine with uplands vector information
+Ext_26_18_df_v2 <- as.data.frame(cbind(Sub_pts_26_18, Ext_26_18_df)) %>%
+  # Remove the outdated coordinates columns (since we've reprojected the shapefile)
+  dplyr::select(-crds_x1, -crds_x2) %>%
+  # Rename the new coordinates columns as coords.x1, coords.x2
+  dplyr::rename(coords.x1 = x,
+                coords.x2 = y)
+
+#glimpse((Ext_26_18_df_v2))
+
+melt_26_18 <- Ext_26_18_df_v2 %>%
+  # Pivot df longways
+  tidyr::pivot_longer(cols = -c(Uplnds_, ptID, EcoType, coords.x1, coords.x2), 
+                      names_to = "variable", 
+                      values_to = "value") %>%
+  # Convert variable column to character
+  dplyr::mutate(variable = as.character(variable)) %>%
+  # Create Tile, Obs_Date, Band columns
+  dplyr::mutate(Tile = stringr::str_split_fixed(variable, '_', 8)[,3],
+                Obs_Date = stringr::str_split_fixed(variable, '_', 8)[,4],
+                Band = stringr::str_split_fixed(variable, '_', 8)[,8]) %>%
+  # Get rid of unnecessary column 
+  dplyr::select(-variable)
+
+# Turn band into columns
+Spec_26_18 <- melt_26_18 %>%
+  tidyr::pivot_wider(names_from = "Band", values_from = "value")
+
+Spec_26_18_clean <- Spec_26_18 %>% 
+  # Remove rows where band values are NA 
+  # If value is NA for one band, it will be for all
+  tidyr::drop_na(B1, B2, B3, B4, B5, B7) %>%
+  # Make all flagged values = NA
+  # If CLOUD_QA > 0, make it NA
+  dplyr::mutate(CLOUD_QA = dplyr::case_when(
+    CLOUD_QA > 0 ~ NA,
+    T ~ CLOUD_QA
+  )) %>%
+  # If PIXEL != 5440, make it NA
+  # 5440 is code for totally clear pixels
+  dplyr::mutate(PIXEL = dplyr::case_when(
+    PIXEL != 5440 ~ NA,
+    T ~ PIXEL
+  )) %>%
+  # If RADSET > 0, make it NA
+  dplyr::mutate(RADSAT = dplyr::case_when(
+    RADSAT > 0 ~ NA,
+    T ~ RADSAT
+  )) %>%
+  # Remove rows with flagged values
+  tidyr::drop_na(CLOUD_QA, PIXEL, RADSAT) %>%
+  # Remove unnecessary columns
+  dplyr::select(-c(RADSAT, PIXEL, LINEAGE, CLOUD_QA, ATMOS_OPACITY))
+
+# Save  
+save(Ext_26_18_df_v2, Spec_26_18_clean, file = file.path(image_dir, "Master_Spec", "Tile_26_18_updated.RDATA"))
+
+# Clean up envr before next tile
+rm(list = setdiff(ls(), c("Smpl_pts", "image_dir", "LStif")))
+gc()
+
+# Tile 26_19 ------------------------------------------------------
+
+# Group by tile
+tile_26_19 <- as.list(list.files(LStif, pattern = glob2rx("*_026019*.TIF$"), full.names = TRUE))
+
+# Read in rasters as a list
+rast_tile_26_19 <- tile_26_19 %>%
+  purrr::map(.f = ~terra::rast(.), .progress = T)
+
+# Stack them
+stack_26_19 <- terra::rast(rast_tile_26_19)
+
+# Make sure sample points have the same crs as the rasters
+Smpl_pts_26_19 <- Smpl_pts %>%
+  terra::project(terra::crs(stack_26_19))
+
+# Subset sample points to tile
+Sub_pts_26_19 <- terra::crop(Smpl_pts_26_19, terra::ext(stack_26_19))
+
+# Extract to tile sample points
+# Takes a while (30 mins)
+Ext_26_19_df <- terra::extract(stack_26_19, Sub_pts_26_19, xy = TRUE, ID = FALSE)
+
+# Combine with uplands vector information
+Ext_26_19_df_v2 <- as.data.frame(cbind(Sub_pts_26_19, Ext_26_19_df)) %>%
+  # Remove the outdated coordinates columns (since we've reprojected the shapefile)
+  dplyr::select(-crds_x1, -crds_x2) %>%
+  # Rename the new coordinates columns as coords.x1, coords.x2
+  dplyr::rename(coords.x1 = x,
+                coords.x2 = y)
+
+#glimpse((Ext_26_19_df_v2))
+
+melt_26_19 <- Ext_26_19_df_v2 %>%
+  # Pivot df longways
+  tidyr::pivot_longer(cols = -c(Uplnds_, ptID, EcoType, coords.x1, coords.x2), 
+                      names_to = "variable", 
+                      values_to = "value") %>%
+  # Convert variable column to character
+  dplyr::mutate(variable = as.character(variable)) %>%
+  # Create Tile, Obs_Date, Band columns
+  dplyr::mutate(Tile = stringr::str_split_fixed(variable, '_', 8)[,3],
+                Obs_Date = stringr::str_split_fixed(variable, '_', 8)[,4],
+                Band = stringr::str_split_fixed(variable, '_', 8)[,8]) %>%
+  # Get rid of unnecessary column 
+  dplyr::select(-variable)
+
+# Turn band into columns
+Spec_26_19 <- melt_26_19 %>%
+  tidyr::pivot_wider(names_from = "Band", values_from = "value")
+
+Spec_26_19_clean <- Spec_26_19 %>% 
+  # Remove rows where band values are NA 
+  # If value is NA for one band, it will be for all
+  tidyr::drop_na(B1, B2, B3, B4, B5, B7) %>%
+  # Make all flagged values = NA
+  # If CLOUD_QA > 0, make it NA
+  dplyr::mutate(CLOUD_QA = dplyr::case_when(
+    CLOUD_QA > 0 ~ NA,
+    T ~ CLOUD_QA
+  )) %>%
+  # If PIXEL != 5440, make it NA
+  # 5440 is code for totally clear pixels
+  dplyr::mutate(PIXEL = dplyr::case_when(
+    PIXEL != 5440 ~ NA,
+    T ~ PIXEL
+  )) %>%
+  # If RADSET > 0, make it NA
+  dplyr::mutate(RADSAT = dplyr::case_when(
+    RADSAT > 0 ~ NA,
+    T ~ RADSAT
+  )) %>%
+  # Remove rows with flagged values
+  tidyr::drop_na(CLOUD_QA, PIXEL, RADSAT) %>%
+  # Remove unnecessary columns
+  dplyr::select(-c(RADSAT, PIXEL, LINEAGE, CLOUD_QA, ATMOS_OPACITY, QA))
+
+# Save  
+save(Ext_26_19_df_v2, Spec_26_19_clean, file = file.path(image_dir, "Master_Spec", "Tile_26_19_updated.RDATA"))
+
+# Clean up envr before next tile
+rm(list = setdiff(ls(), c("Smpl_pts", "image_dir", "LStif")))
+gc()
+
+# Tile 27_18 ------------------------------------------------------
+
+# Group by tile
+tile_27_18 <- as.list(list.files(LStif, pattern = glob2rx("*_027018*.TIF$"), full.names = TRUE))
+
+# Identify files that are either zero-bytes, can't be read in with terra::rast(), or plot with terra::plot()
+# as these files will cause the R session to abort itself later on
+problem_files <- c("LE07_CU_027018_20000603_20210425_02_SR_B7.TIF",
+                   "LE07_CU_027018_20000612_20210425_02_SR_B7.TIF",
+                   "LE07_CU_027018_20000612_20210425_02_SR_CLOUD_QA.TIF",
+                   "LE07_CU_027018_20000619_20210425_02_SR_B5.TIF",
+                   "LE07_CU_027018_20000619_20210425_02_SR_B7.TIF",
+                   "LE07_CU_027018_20000628_20210425_02_SR_B1.TIF",
+                   "LE07_CU_027018_20010428_20210426_02_SR_B3.TIF",
+                   "LE07_CU_027018_20010724_20210426_02_SR_B4.TIF",
+                   "LE07_CU_027018_20031103_20210428_02_SR_B5.TIF",
+                   "LE07_CU_027018_20141203_20210502_02_SR_B5.TIF",
+                   "LE07_CU_027018_20161122_20210502_02_QA_PIXEL.TIF",
+                   "LE07_CU_027018_20171211_20210503_02_SR_CLOUD_QA.TIF",
+                   "LE07_CU_027018_20190912_20210504_02_SR_B3.TIF",
+                   "LE07_CU_027018_20190912_20210504_02_SR_B4.TIF",
+                   "LE07_CU_027018_20191014_20210504_02_SR_ATMOS_OPACITY.TIF",
+                   "LE07_CU_027018_20200923_20210504_02_SR_B7.TIF",
+                   "LE07_CU_027018_20200923_20210504_02_SR_CLOUD_QA.TIF",
+                   "LE07_CU_027018_20000628_20210425_02_SR_B2.TIF",
+                   "LE07_CU_027018_20000628_20210425_02_SR_B3.TIF",
+                   "LE07_CU_027018_20001205_20210426_02_SR_B7.TIF",
+                   "LE07_CU_027018_20030925_20210428_02_SR_B4.TIF",
+                   "LE07_CU_027018_20030925_20210428_02_SR_B5.TIF",
+                   "LE07_CU_027018_20031128_20210428_02_SR_B4.TIF",
+                   "LE07_CU_027018_20100428_20210430_02_SR_B1.TIF",
+                   "LE07_CU_027018_20100428_20210430_02_SR_B2.TIF",
+                   "LE07_CU_027018_20171220_20210503_02_SR_B2.TIF",
+                   "LE07_CU_027018_20200907_20210504_02_SR_B5.TIF",
+                   "LE07_CU_027018_20200907_20210504_02_SR_B7.TIF",
+                   "LE07_CU_027018_20200923_20210504_02_SR_B5.TIF", 
+                   "LE07_CU_027018_20010615_20210426_02_SR_B7.TIF",
+                   "LE07_CU_027018_20010724_20210426_02_SR_B5.TIF", 
+                   "LE07_CU_027018_20031128_20210428_02_SR_B3.TIF",
+                   "LE07_CU_027018_20141212_20210502_02_SR_B1.TIF",
+                   "LE07_CU_027018_20161115_20210502_02_SR_B5.TIF",
+                   "LE07_CU_027018_20161115_20210502_02_SR_B7.TIF",
+                   "LE07_CU_027018_20171211_20210503_02_SR_B5.TIF",
+                   "LE07_CU_027018_20171220_20210503_02_QA_LINEAGE.TIF",
+                   "LE07_CU_027018_20200930_20210504_02_SR_B2.TIF",
+                   "LE07_CU_027018_20001205_20210426_02_SR_B5.TIF",
+                   "LE07_CU_027018_20010428_20210426_02_SR_B1.TIF",
+                   "LE07_CU_027018_20010428_20210426_02_SR_B2.TIF",
+                   "LE07_CU_027018_20010615_20210426_02_SR_B4.TIF",
+                   "LE07_CU_027018_20010615_20210426_02_SR_B5.TIF",
+                   "LE07_CU_027018_20031103_20210428_02_SR_B7.TIF")
+
+tile_27_18_fixed <- tile_27_18
+
+# Remove problem files
+for (i in problem_files){
+  problem_index <- stringr::str_detect(tile_27_18_fixed, i)
+  tile_27_18_fixed <- tile_27_18_fixed[-which(problem_index)]
 }
 
-##########################################################################################################################################################
-# 2. IMAGE PROCESSING
-##########################################################################################################################################################
+# Read in rasters as a list
+rast_tile_27_18 <- tile_27_18_fixed %>%
+  purrr::map(.f = ~terra::rast(.), .progress = T)
 
-# SET UP THE ENVIRONMENT  
-# Pull out tifs from new directory 
-setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Image_Processing") 
-LStif <- "./LS_tif"
-# make a list of all the .tif files
-all_tifs <- list.files(LStif, pattern = "TIF") 
-# Load upland sample points 
-#setwd("/Volumes/inwedata/Malone Lab/ENP Fire/Grace_McLeod/Sampling")
-Smpl_pts <- sf::st_read(dsn = "/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Sampling", layer = "Sample_pts_upland")
-# set crs to match landsat
-Smpl_pts <- st_transform(Smpl_pts, crs("+proj=aea +lat_0=23 +lon_0=-96 +lat_1=29.5 +lat_2=45.5 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"))
+# Stack them
+stack_27_18 <- terra::rast(rast_tile_27_18)
 
+# Make sure sample points have the same crs as the rasters
+Smpl_pts_27_18 <- Smpl_pts %>%
+  terra::project(terra::crs(stack_27_18))
 
-# TILE 26_18.............................................................................................................................................................
+# Subset sample points to tile
+Sub_pts_27_18 <- terra::crop(Smpl_pts_27_18, terra::ext(stack_27_18))
+
+# Extract to tile sample points
+# Takes a while (30 mins)
+Ext_27_18_df <- terra::extract(stack_27_18, Sub_pts_27_18, xy = TRUE, ID = FALSE)
+
+# Combine with uplands vector information
+Ext_27_18_df_v2 <- as.data.frame(cbind(Sub_pts_27_18, Ext_27_18_df)) %>%
+  # Remove the outdated coordinates columns (since we've reprojected the shapefile)
+  dplyr::select(-crds_x1, -crds_x2) %>%
+  # Rename the new coordinates columns as coords.x1, coords.x2
+  dplyr::rename(coords.x1 = x,
+                coords.x2 = y)
+
+#glimpse((Ext_27_18_df_v2))
+
+# Divide into parts to avoid exceeding vector memory
+Ext_27_18_df_v2_A <- Ext_27_18_df_v2[1:10000,]
+Ext_27_18_df_v2_B <- Ext_27_18_df_v2[10001:20000,]
+Ext_27_18_df_v2_C <- Ext_27_18_df_v2[20001:30000,]
+Ext_27_18_df_v2_D <- Ext_27_18_df_v2[30001:40000,]
+Ext_27_18_df_v2_E <- Ext_27_18_df_v2[40001:50000,]
+Ext_27_18_df_v2_F <- Ext_27_18_df_v2[50001:nrow(Ext_27_18_df_v2),]
+
+# Combine parts in a list
+Ext_27_18_df_v2_parts <- list(Ext_27_18_df_v2_A,
+                              Ext_27_18_df_v2_B,
+                              Ext_27_18_df_v2_C,
+                              Ext_27_18_df_v2_D,
+                              Ext_27_18_df_v2_E,
+                              Ext_27_18_df_v2_F)
+
+# Create empty list to store the result for each part
+Spec_27_18_clean_together <- list()
+
+for (i in 1:length(Ext_27_18_df_v2_parts)){
+  
+  message("On part: ", i, " of ", length(Ext_27_18_df_v2_parts))
+  
+  melt_27_18 <- Ext_27_18_df_v2_parts[[i]] %>%
+    # Pivot df longways
+    tidyr::pivot_longer(cols = -c(Uplnds_, ptID, EcoType, coords.x1, coords.x2), 
+                        names_to = "variable", 
+                        values_to = "value") %>%
+    # Convert variable column to character
+    dplyr::mutate(variable = as.character(variable)) %>%
+    # Create Tile, Obs_Date, Band columns
+    dplyr::mutate(Tile = stringr::str_split_fixed(variable, '_', 8)[,3],
+                  Obs_Date = stringr::str_split_fixed(variable, '_', 8)[,4],
+                  Band = stringr::str_split_fixed(variable, '_', 8)[,8]) %>%
+    # Get rid of unnecessary column 
+    dplyr::select(-variable)
+  
+  # Turn band into columns
+  Spec_27_18 <- melt_27_18 %>%
+    tidyr::pivot_wider(names_from = "Band", values_from = "value")
+  
+  Spec_27_18_clean <- Spec_27_18 %>% 
+    # Remove rows where band values are NA 
+    # If value is NA for one band, it will be for all
+    tidyr::drop_na(B1, B2, B3, B4, B5, B7) %>%
+    # Make all flagged values = NA
+    # If CLOUD_QA > 0, make it NA
+    dplyr::mutate(CLOUD_QA = dplyr::case_when(
+      CLOUD_QA > 0 ~ NA,
+      T ~ CLOUD_QA
+    )) %>%
+    # If PIXEL != 5440, make it NA
+    # 5440 is code for totally clear pixels
+    dplyr::mutate(PIXEL = dplyr::case_when(
+      PIXEL != 5440 ~ NA,
+      T ~ PIXEL
+    )) %>%
+    # If RADSET > 0, make it NA
+    dplyr::mutate(RADSAT = dplyr::case_when(
+      RADSAT > 0 ~ NA,
+      T ~ RADSAT
+    )) %>%
+    # Remove rows with flagged values
+    tidyr::drop_na(CLOUD_QA, PIXEL, RADSAT) %>%
+    # Remove unnecessary columns
+    dplyr::select(-c(RADSAT, PIXEL, LINEAGE, CLOUD_QA, ATMOS_OPACITY))
+  
+  # Store result for this part
+  Spec_27_18_clean_together[[i]] <- Spec_27_18_clean
+}
+
+# Turn into a dataframe
+Spec_27_18_clean_together_df <- Spec_27_18_clean_together %>%
+  purrr::map_dfr(.f = select, everything()) %>%
+  dplyr::relocate(B2, .after = B1) %>%
+  dplyr::relocate(B3, .after = B2) %>%
+  dplyr::relocate(B4, .after = B3) %>%
+  dplyr::relocate(B5, .after = B4) %>%
+  dplyr::relocate(B7, .after = B5)
+
+# Save  
+save(Ext_27_18_df_v2, Spec_27_18_clean_together_df, file = file.path(image_dir, "Master_Spec", "Tile_27_18_updated.RDATA"))
+
+# Clean up envr before next tile
+rm(list = setdiff(ls(), c("Smpl_pts", "image_dir", "LStif")))
+gc()
+
+# Tile 27_19 ------------------------------------------------------
+
 # Group by tile
-tile_26_18 <- list.files(LStif, pattern = glob2rx("*_026018*.TIF$"), full.names = TRUE)
-# create stack
-system.time(stack_26_18 <- stack(tile_26_18))
-# subset sample points to tile
-test1 <- subset(stack_26_18, 1)
-Sub_pts_2618 <- st_as_sf(crop(vect(Smpl_pts),  ext(test1)))
-# extract to tile sample points
-system.time(Ext_26_18_sp <- terra::extract(stack_26_18, Sub_pts_2618, method= "simple", buffer=NULL, df=TRUE, sp=TRUE, factors=TRUE))
-Ext_26_18_df <- as.data.frame (Ext_26_18_sp)
+tile_27_19 <- as.list(list.files(LStif, pattern = glob2rx("*_027019*.TIF$"), full.names = TRUE))
 
-# SUBSET DATAFRAME (to avoid exhausting vector memory)
-# split into chunks *10,000 at a time seemed to go well* 
-    Sub_26_18 <- Ext_26_18_df[1:13,]
-    # Sub_26_18 <- Ext_26_18_df[7893:15785,]
-# melt df longways
-melt_26_18 <- melt(Sub_26_18, na.rm=FALSE, id=c("ptID", "EcoType", "coords.x1", "coords.x2"))
-# split names
-class( melt_26_18$variable)
-melt_26_18$variable <- as.character( melt_26_18$variable)
-melt_26_18 [c('LS7', 'CU', 'Tile', 'Obs_Date', "DLdate", 'colect', 'type', 'Band')] <- str_split_fixed(melt_26_18$variable, '_', 8)
-# get rid of unnecessary columns 
-melt_26_18$variable <- NULL ; melt_26_18$LS7 <- NULL ; melt_26_18$CU <- NULL ; melt_26_18$DLdate <- NULL ;  melt_26_18$colect <- NULL ;  melt_26_18$type <- NULL 
-# turn band into columns
-Spec_26_18 <- melt_26_18 %>%
-  spread(Band, value)
-# remove rows where band values =NA 
-# if value is NA for one band, it will be for all.
-Spec_26_18_noNA <- Spec_26_18 %>% drop_na(c('B1', 'B2', 'B3', 'B4', 'B5', 'B7'))
-# QAQC
-# make all flagged values = NA
-Spec_26_18_qaqc <- Spec_26_18_noNA
-Spec_26_18_qaqc$CLOUD_QA[Spec_26_18_qaqc$CLOUD_QA > 0] <- NA
-Spec_26_18_qaqc$PIXEL[Spec_26_18_qaqc$PIXEL != 5440] <- NA  # 5440 is code for totally clear pixels
-Spec_26_18_qaqc$RADSAT[Spec_26_18_qaqc$RADSAT > 0] <- NA
-# remove rows with flagged values
-Spec_26_18_clean <- Spec_26_18_qaqc %>% drop_na(c('CLOUD_QA', 'PIXEL', 'RADSAT'))
-Spec_26_18_clean$RADSAT <- NULL ; Spec_26_18_clean$QA <- NULL ; Spec_26_18_clean$PIXEL <- NULL ; Spec_26_18_clean$LINEAGE <- NULL ; Spec_26_18_clean$CLOUD_QA <- NULL ; Spec_26_18_clean$ATMOS_OPACITY <- NULL
-# rename this subset and clear environment before running next subset
-    # Spec_26_18_a <- Spec_26_18_clean
-    # Spec_26_18_b <- Spec_26_18_clean
-rm(melt_26_18, Spec_26_18, Spec_26_18_clean, Spec_26_18_noNA, Spec_26_18_qaqc, Sub_26_18)
-# merge abcd
-Spec_26_18 <- rbind(Spec_26_18_a, Spec_26_18_b)
+# Identify files that are either zero-bytes, can't be read in with terra::rast(), or plot with terra::plot()
+# as these files will cause the R session to abort itself later on
+problem_files <- c("LE07_CU_027019_20000315_20210425_02_QA_RADSAT.TIF",
+                   "LE07_CU_027019_20000527_20210425_02_SR_B7.TIF",
+                   "LE07_CU_027019_20000603_20210425_02_SR_B2.TIF",
+                   "LE07_CU_027019_20020720_20210427_02_SR_B5.TIF",
+                   "LE07_CU_027019_20020720_20210427_02_SR_B7.TIF",
+                   "LE07_CU_027019_20020727_20210427_02_QA_LINEAGE.TIF",
+                   "LE07_CU_027019_20020812_20210427_02_QA_LINEAGE.TIF",
+                   "LE07_CU_027019_20020812_20210427_02_SR_B2.TIF",
+                   "LE07_CU_027019_20061127_20210429_02_QA_LINEAGE.TIF",
+                   "LE07_CU_027019_20061127_20210429_02_QA_PIXEL.TIF",
+                   "LE07_CU_027019_20080618_20210430_02_QA_LINEAGE.TIF",
+                   "LE07_CU_027019_20090204_20210430_02_SR_B3.TIF",
+                   "LE07_CU_027019_20090204_20210430_02_SR_B4.TIF",
+                   "LE07_CU_027019_20101021_20210430_02_QA_LINEAGE.TIF",
+                   "LE07_CU_027019_20101021_20210430_02_QA_PIXEL.TIF",
+                   "LE07_CU_027019_20131130_20210501_02_QA_RADSAT.TIF",
+                   "LE07_CU_027019_20201228_20210504_02_SR_B1.TIF",
+                   "LE07_CU_027019_20020821_20210427_02_SR_B7.TIF",
+                   "LE07_CU_027019_20020821_20210427_02_SR_CLOUD_QA.TIF",
+                   "LE07_CU_027019_20131123_20210501_02_SR_B7.TIF", #
+                   "LE07_CU_027019_20000527_20210425_02_SR_CLOUD_QA.TIF",
+                   "LE07_CU_027019_20020727_20210427_02_SR_B4.TIF",
+                   "LE07_CU_027019_20020922_20210427_02_SR_B1.TIF",
+                   "LE07_CU_027019_20020922_20210427_02_SR_B2.TIF",
+                   "LE07_CU_027019_20131123_20210501_02_SR_B5.TIF",
+                   "LE07_CU_027019_20140705_20210501_02_SR_B2.TIF",
+                   "LE07_CU_027019_20140705_20210501_02_SR_B3.TIF",
+                   "LE07_CU_027019_20140705_20210501_02_SR_B4.TIF",
+                   "LE07_CU_027019_20140705_20210501_02_SR_B7.TIF",
+                   "LE07_CU_027019_20201228_20210504_02_SR_B2.TIF")
 
-# save
-setwd("./Master_Spec")
-save (stack_26_18, Ext_26_18_df, Spec_26_18, file="Tile_26_18.RDATA")
-# clean up envr before next tile
-rm(stack_26_18, Ext_26_18_df, Sub_pts_2618, Ext_26_18_sp, Spec_26_18_a, Spec_26_18_b) 
+tile_27_19_fixed <- tile_27_19
 
+# Remove problem files
+for (i in problem_files){
+  problem_index <- stringr::str_detect(tile_27_19_fixed, i)
+  tile_27_19_fixed <- tile_27_19_fixed[-which(problem_index)]
+}
 
+# Read in rasters as a list
+rast_tile_27_19 <- tile_27_19_fixed %>%
+  purrr::map(.f = ~terra::rast(.), .progress = T)
 
-# TILE 26_19.............................................................................................................................................................
-# Group by tile
-tile_26_19 <- list.files(LStif, pattern = glob2rx("*_026019*.TIF$"), full.names = TRUE)
-# create stack
-system.time(stack_26_19 <- stack(tile_26_19))
-# subset sample points to tile
-test1 <- subset(stack_26_19, 1)
-Sub_pts_2619 <- st_as_sf(crop(vect(Smpl_pts),  ext(test1)))
-# extract to tile sample points
-system.time(Ext_26_19_sp <- raster::extract(stack_26_19, Sub_pts_2619, method= "simple", buffer=NULL, df=TRUE, sp=TRUE, factors=TRUE))
-Ext_26_19_df <- as.data.frame (Ext_26_19_sp)
+# Stack them
+stack_27_19 <- terra::rast(rast_tile_27_19)
 
-# SUBSET DATAFRAME (to avoid exhausting vector memory)
-# split into chunks (42168/4= 10542)
-      # Sub_26_19 <- Ext_26_19_df[1:10542,]
-      # Sub_26_19 <- Ext_26_19_df[10543:21084,]
-      # Sub_26_19 <- Ext_26_19_df[21085:31626,]
-      # Sub_26_19 <- Ext_26_19_df[31627:42168,]
-# melt df longways
-melt_26_19 <- melt(Sub_26_19, na.rm=FALSE, id=c("ptID", "EcoType", "coords.x1", "coords.x2"))
-# split names
-class( melt_26_19$variable)
-melt_26_19$variable <- as.character( melt_26_19$variable)
-melt_26_19 [c('LS7', 'CU', 'Tile', 'Obs_Date', "DLdate", 'colect', 'type', 'Band')] <- str_split_fixed(melt_26_19$variable, '_', 8)
-# get rid of unnecessary columns 
-melt_26_19$variable <- NULL ; melt_26_19$LS7 <- NULL ; melt_26_19$CU <- NULL ; melt_26_19$DLdate <- NULL ;  melt_26_19$colect <- NULL ;  melt_26_19$type <- NULL 
-# turn band into columns
-Spec_26_19 <- melt_26_19 %>%
-  spread(Band, value)
-# remove rows where band values =NA 
-# if value is NA for one band, it will be for all.
-Spec_26_19_noNA <- Spec_26_19 %>% drop_na(c('B1', 'B2', 'B3', 'B4', 'B5', 'B7'))
-# QAQC
-# make all flagged values = NA
-Spec_26_19_qaqc <- Spec_26_19_noNA
-Spec_26_19_qaqc$CLOUD_QA[Spec_26_19_qaqc$CLOUD_QA > 0] <- NA
-Spec_26_19_qaqc$PIXEL[Spec_26_19_qaqc$PIXEL != 5440] <- NA  # 5440 is code for totally clear pixels
-Spec_26_19_qaqc$RADSAT[Spec_26_19_qaqc$RADSAT > 0] <- NA
-# remove rows with flagged values
-Spec_26_19_clean <- Spec_26_19_qaqc %>% drop_na(c('CLOUD_QA', 'PIXEL', 'RADSAT'))
-Spec_26_19_clean$RADSAT <- NULL ; Spec_26_19_clean$QA <- NULL ; Spec_26_19_clean$PIXEL <- NULL ; Spec_26_19_clean$LINEAGE <- NULL ; Spec_26_19_clean$CLOUD_QA <- NULL ; Spec_26_19_clean$ATMOS_OPACITY <- NULL
-# rename this subset and clear environment before running next subset
-     # Spec_26_19_a <- Spec_26_19_clean
-     # Spec_26_19_b <- Spec_26_19_clean
-     # Spec_26_19_c <- Spec_26_19_clean
-     # Spec_26_19_d <- Spec_26_19_clean
-rm(melt_26_19, Spec_26_19, Spec_26_19_clean, Spec_26_19_noNA, Spec_26_19_qaqc, Sub_26_19)
-# merge abcd
-Spec_26_19 <- rbind(Spec_26_19_a, Spec_26_19_b)
-Spec_26_19 <- rbind(Spec_26_19, Spec_26_19_c)
-Spec_26_19 <- rbind(Spec_26_19, Spec_26_19_d)
+# Make sure sample points have the same crs as the rasters
+Smpl_pts_27_19 <- Smpl_pts %>%
+  terra::project(terra::crs(stack_27_19))
 
-# save
-#setwd("/Volumes/inwedata/Malone Lab/ENP Fire/Grace_McLeod/Image_Processing/Master_Spec")
-save (stack_26_19, Ext_26_19_df, Spec_26_19, file="Tile_26_19.RDATA")
-# clean up envr before next tile
-rm(stack_26_19, Sub_pts_2619, Ext_26_19_sp, Ext_26_19_df, Spec_26_19_a, Spec_26_19_b, Spec_26_19_c, Spec_26_19_d)
+# Subset sample points to tile
+Sub_pts_27_19 <- terra::crop(Smpl_pts_27_19, terra::ext(stack_27_19))
 
+# Identify indices to split chunks on
+chunks <- seq(1, length(Sub_pts_27_19), by = 10000)
 
-# TILE 27_18.............................................................................................................................................................
-# Group by tile
-tile_27_18 <- list.files(LStif, pattern = glob2rx("*_027018*.TIF$"), full.names = TRUE)
-# create stack
-system.time(stack_27_18 <- stack(tile_27_18))
-# subset sample points to tile
-test1 <- subset(stack_27_18, 1)
-Sub_pts_2718 <- st_as_sf(crop(vect(Smpl_pts),  ext(test1)))
-# extract to tile sample points
-system.time(Ext_27_18_sp <- raster::extract(stack_27_18, Sub_pts_2718, method= "simple", buffer=NULL, df=TRUE, sp=TRUE, factors=TRUE))
-Ext_27_18_df <- as.data.frame (Ext_27_18_sp)
-
-# SUBSET DATAFRAME (to avoid exhausting vector memory)
-# split into chunks (80131/8= 10016.38)
-    # Sub_27_18 <- Ext_27_18_df[1:10016,]
-    # Sub_27_18 <- Ext_27_18_df[10017:20032,]
-    # Sub_27_18 <- Ext_27_18_df[20033:30048,]
-    # Sub_27_18 <- Ext_27_18_df[30049:40064,]
-    # Sub_27_18 <- Ext_27_18_df[40065:50080,]
-    # Sub_27_18 <- Ext_27_18_df[50081:60096,]
-    # Sub_27_18 <- Ext_27_18_df[60097:70112,]
-    # Sub_27_18 <- Ext_27_18_df[70113:80131,]
-# melt df longways
-melt_27_18 <- melt(Sub_27_18, na.rm=FALSE, id=c("ptID", "EcoType", "coords.x1", "coords.x2"))
-# split names
-class( melt_27_18$variable)
-melt_27_18$variable <- as.character( melt_27_18$variable)
-melt_27_18 [c('LS7', 'CU', 'Tile', 'Obs_Date', "DLdate", 'colect', 'type', 'Band')] <- str_split_fixed(melt_27_18$variable, '_', 8)
-# get rid of unnecessary columns 
-melt_27_18$variable <- NULL ; melt_27_18$LS7 <- NULL ; melt_27_18$CU <- NULL ; melt_27_18$DLdate <- NULL ;  melt_27_18$colect <- NULL ;  melt_27_18$type <- NULL 
-# turn band into columns
-Spec_27_18 <- melt_27_18 %>%
-  spread(Band, value)
-# remove rows where band values =NA 
-# if value is NA for one band, it will be for all.
-Spec_27_18_noNA <- Spec_27_18 %>% drop_na(c('B1', 'B2', 'B3', 'B4', 'B5', 'B7'))
-# QAQC
-# make all flagged values = NA
-Spec_27_18_qaqc <- Spec_27_18_noNA
-Spec_27_18_qaqc$CLOUD_QA[Spec_27_18_qaqc$CLOUD_QA > 0] <- NA
-Spec_27_18_qaqc$PIXEL[Spec_27_18_qaqc$PIXEL != 5440] <- NA  # 5440 is code for totally clear pixels
-Spec_27_18_qaqc$RADSAT[Spec_27_18_qaqc$RADSAT > 0] <- NA
-# remove rows with flagged values
-Spec_27_18_clean <- Spec_27_18_qaqc %>% drop_na(c('CLOUD_QA', 'PIXEL', 'RADSAT'))
-Spec_27_18_clean$RADSAT <- NULL ; Spec_27_18_clean$QA <- NULL ; Spec_27_18_clean$PIXEL <- NULL ; Spec_27_18_clean$LINEAGE <- NULL ; Spec_27_18_clean$CLOUD_QA <- NULL ; Spec_27_18_clean$ATMOS_OPACITY <- NULL
-# rename this subset and clear environment before running next subset
-    # Spec_27_18_a <- Spec_27_18_clean
-    # Spec_27_18_b <- Spec_27_18_clean
-    # Spec_27_18_c <- Spec_27_18_clean
-    # Spec_27_18_d <- Spec_27_18_clean
-    # Spec_27_18_e <- Spec_27_18_clean
-    # Spec_27_18_f <- Spec_27_18_clean
-    # Spec_27_18_g <- Spec_27_18_clean
-    # Spec_27_18_h <- Spec_27_18_clean
-rm(melt_27_18, Spec_27_18, Spec_27_18_clean, Spec_27_18_noNA, Spec_27_18_qaqc, Sub_27_18)
-# merge abcd
-Spec_27_18 <- rbind(Spec_27_18_a, Spec_27_18_b)
-Spec_27_18 <- rbind(Spec_27_18, Spec_27_18_c)
-Spec_27_18 <- rbind(Spec_27_18, Spec_27_18_d)
-Spec_27_18 <- rbind(Spec_27_18, Spec_27_18_e)
-Spec_27_18 <- rbind(Spec_27_18, Spec_27_18_f)
-Spec_27_18 <- rbind(Spec_27_18, Spec_27_18_g)
-Spec_27_18 <- rbind(Spec_27_18, Spec_27_18_h)
-
-# save
-#setwd("/Volumes/inwedata/Malone Lab/ENP Fire/Grace_McLeod/Image_Processing/Master_Spec")
-save (stack_27_18, Ext_27_18_df, Spec_27_18,  file="Tile_27_18.RDATA") 
-# clean up envr before next tile
-rm(stack_27_18,  Ext_27_18_df, Sub_pts_2718, Ext_27_18_sp, Spec_27_18_a, Spec_27_18_b, Spec_27_18_c, Spec_27_18_d, Spec_27_18_e, Spec_27_18_f, Spec_27_18_g, Spec_27_18_h) 
-
-
-# TILE 27_19.............................................................................................................................................................
-# Group by tile
-tile_27_19 <- list.files(LStif, pattern = glob2rx("*_027019*.TIF$"), full.names = TRUE)
-# create stack
-system.time(stack_27_19 <- stack(tile_27_19))
-# subset sample points to tile
-test1 <- subset(stack_27_19, 1)
-Sub_pts_2719 <- st_as_sf(crop(vect(Smpl_pts),  ext(test1)))
-# extract to tile sample points
-system.time(Ext_27_19_sp <- raster::extract(stack_27_19, Sub_pts_2719, method= "simple", buffer=NULL, df=TRUE, sp=TRUE, factors=TRUE))
-Ext_27_19_df <- as.data.frame (Ext_27_19_sp)
-
-# SUBSET DATAFRAME (to avoid exhausting vector memory)
-#  ....this one is huge...need a new appraoch...
-# create a blank Spec_27_29 dataframe that chunk dfs can be appended to
-Spec_27_19 <- data.frame(matrix(ncol=12, nrow=0))
-colnames(Spec_27_19) <- colnames(Spec_26_18)
-# Its a prime number....do the first 410000 in chunks, then the remaining 3686....stupid I know but it should work
-sub1 <- Ext_27_19_df[1:410000,]
-      # just to do it faster on 2 computers 
-     # sub1 <- Ext_27_19_df[1:210000,]
-        #sub1<- Ext_27_19_df[210001:410000,]
-# Make list of low ends of the chunk 
-a <- seq(1, 400001, 10000)
-      # a <- seq(40001, 200001, 10000 )
-        #a <- seq(210001, 400001, 10000)
-# Loop through sub1 
-for (i in a) {
-  print(i)
-  # subset to the chunk
-  b <- i+9999 
-  chunk <- sub1[i:b,] 
-  #  RUN NORMAL PROCESS
-  # melt df longways
-  melt_27_19 <- melt(chunk, na.rm=FALSE, id=c("ptID", "EcoType", "coords.x1", "coords.x2"))
-  # split names
-  class( melt_27_19$variable)
-  melt_27_19$variable <- as.character( melt_27_19$variable)
-  melt_27_19 [c('LS7', 'CU', 'Tile', 'Obs_Date', "DLdate", 'colect', 'type', 'Band')] <- str_split_fixed(melt_27_19$variable, '_', 8)
-  # get rid of unnecessary columns 
-  melt_27_19$variable <- NULL ; melt_27_19$LS7 <- NULL ; melt_27_19$CU <- NULL ; melt_27_19$DLdate <- NULL ;  melt_27_19$colect <- NULL ;  melt_27_19$type <- NULL 
-  # turn band into columns
-  bands_27_19 <- melt_27_19 %>%
-    spread(Band, value)
-  # remove rows where band values =NA 
-  # if value is NA for one band, it will be for all.
-  Spec_27_19_noNA <- bands_27_19 %>% drop_na(c('B1', 'B2', 'B3', 'B4', 'B5', 'B7'))
-  # QAQC
-  # make all flagged values = NA
-  Spec_27_19_qaqc <- Spec_27_19_noNA
-  Spec_27_19_qaqc$CLOUD_QA[Spec_27_19_qaqc$CLOUD_QA > 0] <- NA
-  Spec_27_19_qaqc$PIXEL[Spec_27_19_qaqc$PIXEL != 5440] <- NA  # 5440 is code for totally clear pixels
-  Spec_27_19_qaqc$RADSAT[Spec_27_19_qaqc$RADSAT > 0] <- NA
-  # remove rows with flagged values
-  Spec_27_19_clean <- Spec_27_19_qaqc %>% drop_na(c('CLOUD_QA', 'PIXEL', 'RADSAT'))
-  Spec_27_19_clean$RADSAT <- NULL ; Spec_27_19_clean$QA <- NULL ; Spec_27_19_clean$PIXEL <- NULL ; Spec_27_19_clean$LINEAGE <- NULL ; Spec_27_19_clean$CLOUD_QA <- NULL ; Spec_27_19_clean$ATMOS_OPACITY <- NULL
-  # append to Spec_27_19 df
-  Spec_27_19 <- rbind(Spec_27_19, Spec_27_19_clean)
-  # clean up 
-  rm(melt_27_19, Spec_27_19_clean, Spec_27_19_noNA, Spec_27_19_qaqc, bands_27_19)
+# For each chunk...
+for (i in 33:34){
+  
+  message("On part: ", i, " of ", length(chunks))
+  
+  # Amount to increment the index by
+  increment <- 9999
+  
+  # If we're on the last chunk, increment by 9830 instead
+  if (i == 34) {
+    increment <- 9830
+  }
+  
+  # Split into chunk
+  Sub_pts_27_19_chunk <- Sub_pts_27_19[chunks[i]:(chunks[i]+increment)]
+  
+  # Extract to tile sample points
+  # Takes a while (20 mins)
+  Ext_27_19_df <- terra::extract(stack_27_19, Sub_pts_27_19_chunk, xy = TRUE, ID = FALSE)
+  
+  # Combine with uplands vector information
+  Ext_27_19_df_v2 <- as.data.frame(cbind(Sub_pts_27_19_chunk, Ext_27_19_df)) %>%
+    # Remove the outdated coordinates columns (since we've reprojected the shapefile)
+    dplyr::select(-crds_x1, -crds_x2) %>%
+    # Rename the new coordinates columns as coords.x1, coords.x2
+    dplyr::rename(coords.x1 = x,
+                  coords.x2 = y)
+  
+  # Create a file name for this chunk
+  file_name1 <- paste0("Ext_27_19_df_", chunks[i], "_", chunks[i]+increment, ".csv")
+  
+  # Export extracted sample points
+  write.csv(Ext_27_19_df_v2, 
+            file = file.path(image_dir, "Master_Spec", "Tile_27_19_parts", file_name1), 
+            row.names = F)
+  
+  #glimpse((Ext_27_19_df_v2))
+  
+  melt_27_19 <- Ext_27_19_df_v2 %>%
+    # Pivot df longways
+    tidyr::pivot_longer(cols = -c(Uplnds_, ptID, EcoType, coords.x1, coords.x2), 
+                        names_to = "variable", 
+                        values_to = "value") %>%
+    # Convert variable column to character
+    dplyr::mutate(variable = as.character(variable)) %>%
+    # Create Tile, Obs_Date, Band columns
+    dplyr::mutate(Tile = stringr::str_split_fixed(variable, '_', 8)[,3],
+                  Obs_Date = stringr::str_split_fixed(variable, '_', 8)[,4],
+                  Band = stringr::str_split_fixed(variable, '_', 8)[,8]) %>%
+    # Get rid of unnecessary column 
+    dplyr::select(-variable)
+  
+  # Turn band into columns
+  Spec_27_19 <- melt_27_19 %>%
+    tidyr::pivot_wider(names_from = "Band", values_from = "value")
+  
+  Spec_27_19_clean <- Spec_27_19 %>% 
+    # Remove rows where band values are NA 
+    # If value is NA for one band, it will be for all
+    tidyr::drop_na(B1, B2, B3, B4, B5, B7) %>%
+    # Make all flagged values = NA
+    # If CLOUD_QA > 0, make it NA
+    dplyr::mutate(CLOUD_QA = dplyr::case_when(
+      CLOUD_QA > 0 ~ NA,
+      T ~ CLOUD_QA
+    )) %>%
+    # If PIXEL != 5440, make it NA
+    # 5440 is code for totally clear pixels
+    dplyr::mutate(PIXEL = dplyr::case_when(
+      PIXEL != 5440 ~ NA,
+      T ~ PIXEL
+    )) %>%
+    # If RADSET > 0, make it NA
+    dplyr::mutate(RADSAT = dplyr::case_when(
+      RADSAT > 0 ~ NA,
+      T ~ RADSAT
+    )) %>%
+    # Remove rows with flagged values
+    tidyr::drop_na(CLOUD_QA, PIXEL, RADSAT) %>%
+    # Remove unnecessary columns
+    dplyr::select(-c(RADSAT, PIXEL, LINEAGE, CLOUD_QA, ATMOS_OPACITY))
+  
+  # Create another file name for this chunk
+  file_name2 <- paste0("Spec_27_19_clean_", chunks[i], "_", chunks[i]+increment, ".csv")
+  
+  # Export clean extracted sample points
+  write.csv(Spec_27_19_clean, 
+            file = file.path(image_dir, "Master_Spec", "Tile_27_19_parts", file_name2), 
+            row.names = F)
+  
+  rm(Sub_pts_27_19_chunk, Ext_27_19_df, Ext_27_19_df_v2, melt_27_19, Spec_27_19, Spec_27_19_clean)
   
 }
 
-# save
-#setwd("/Volumes/inwedata/Malone Lab/ENP Fire/Grace_McLeod/Image_Processing/Master_Spec")
-save (Spec_27_19, file="Spec_27_19.RDATA") 
+# Point to the folder containing all the parts
+parts <- file.path(image_dir, "Master_Spec", "Tile_27_19_parts")
 
+# Identify all Ext_27_19_df_ files
+Ext_27_19_together <- as.list(list.files(parts, pattern = "Ext_27_19_df_", full.names = TRUE))
 
-      
-# Run on ramaining lines 
-sub2 <- Ext_27_19_df[410001:413686,]
-melt_27_19 <- melt(sub2, na.rm=FALSE, id=c("ptID", "EcoType", "coords.x1", "coords.x2"))
-class( melt_27_19$variable)
-melt_27_19$variable <- as.character( melt_27_19$variable)
-melt_27_19 [c('LS7', 'CU', 'Tile', 'Obs_Date', "DLdate", 'colect', 'type', 'Band')] <- str_split_fixed(melt_27_19$variable, '_', 8)
-melt_27_19$variable <- NULL ; melt_27_19$LS7 <- NULL ; melt_27_19$CU <- NULL ; melt_27_19$DLdate <- NULL ;  melt_27_19$colect <- NULL ;  melt_27_19$type <- NULL 
-bands_27_19 <- melt_27_19 %>%
-  spread(Band, value)
-Spec_27_19_noNA <- bands_27_19 %>% drop_na(c('B1', 'B2', 'B3', 'B4', 'B5', 'B7'))
-Spec_27_19_qaqc <- Spec_27_19_noNA
-Spec_27_19_qaqc$CLOUD_QA[Spec_27_19_qaqc$CLOUD_QA > 0] <- NA
-Spec_27_19_qaqc$PIXEL[Spec_27_19_qaqc$PIXEL != 5440] <- NA  # 5440 is code for totally clear pixels
-Spec_27_19_qaqc$RADSAT[Spec_27_19_qaqc$RADSAT > 0] <- NA
-Spec_27_19_clean <- Spec_27_19_qaqc %>% drop_na(c('CLOUD_QA', 'PIXEL', 'RADSAT'))
-Spec_27_19_clean$RADSAT <- NULL ; Spec_27_19_clean$QA <- NULL ; Spec_27_19_clean$PIXEL <- NULL ; Spec_27_19_clean$LINEAGE <- NULL ; Spec_27_19_clean$CLOUD_QA <- NULL ; Spec_27_19_clean$ATMOS_OPACITY <- NULL
-# append to Spec_27_19
-Spec_27_19 <- rbind(Spec_27_19, Spec_27_19_clean)
-rm(melt_27_19, Spec_27_19_clean, Spec_27_19_noNA, Spec_27_19_qaqc, bands_27_19)
+# Combine files into a dataframe
+Ext_27_19_together_df <- Ext_27_19_together %>%
+  purrr::map(.f = read.csv) %>%
+  purrr::map_dfr(.f = select, everything())
 
-# save
-#setwd("/Volumes/inwedata/Malone Lab/ENP Fire/Grace_McLeod/Image_Processing/Master_Spec")
-save (stack_27_19, Ext_27_19_df, Spec_27_19, file="Tile_27_19.RDATA") 
-# clean up envr 
-rm(list=ls())
+# Identify all Spec_27_19_clean_ files
+Spec_27_19_clean_together <- as.list(list.files(parts, pattern = "Spec_27_19_clean_", full.names = TRUE))
 
+# Combine files into a dataframe
+Spec_27_19_clean_together_df <- Spec_27_19_clean_together %>%
+  purrr::map(.f = read.csv) %>%
+  purrr::map_dfr(.f = select, everything())
 
-##########################################################################################################################################################
-# 3. DATAFRAME INTEGRATION
-##########################################################################################################################################################
-# if wd not already set
-setwd("/Volumes/inwedata/Malone Lab/ENP Fire/Grace_McLeod/Image_Processing/Master_Spec")
-# load files
-load("./Tile_26_18.RDATA")
-load("./Tile_26_19.RDATA")
-load("./Tile_27_18.RDATA")
-load("./Tile_27_19.RDATA")
+# Save  
+save(Ext_27_19_together_df, Spec_27_19_clean_together_df, file = file.path(image_dir, "Master_Spec", "Tile_27_19_updated.RDATA"))
 
-# bind tiles together
-Spec_Master <- rbind(Spec_26_18, Spec_26_19)
-Spec_Master <- rbind(Spec_Master , Spec_27_18)
-Spec_Master <- rbind(Spec_Master , Spec_27_19)
-# Save 
-#setwd("/Volumes/inwedata/Malone Lab/ENP Fire/Grace_McLeod/Image_Processing/Master_Spec")
-save(Spec_Master, file="Spec_Master.RDATA")
+# Clean up envr
+rm(list = setdiff(ls(), c("Smpl_pts", "image_dir", "LStif")))
+gc()
 
-# CALCULATE SPECTRAL INDECIES
+## --------------------------------------------- ##
+#           Dataframe Integration -----
+## --------------------------------------------- ##
+
+# Load files
+load(file.path(image_dir, "Master_Spec", "Tile_26_18_updated.RDATA"))
+load(file.path(image_dir, "Master_Spec", "Tile_26_19_updated.RDATA"))
+load(file.path(image_dir, "Master_Spec", "Tile_27_18_updated.RDATA"))
+load(file.path(image_dir, "Master_Spec", "Tile_27_19_updated.RDATA"))
+
+Spec_27_19_clean_together_df <- Spec_27_19_clean_together_df %>%
+  # Convert some columns to character first
+  dplyr::mutate(Tile = as.character(Tile),
+                Obs_Date = as.character(Obs_Date))
+
+# List tiles together
+Specs <- list(Spec_26_18_clean, Spec_26_19_clean, Spec_27_18_clean_together_df, Spec_27_19_clean_together_df)
+
+# Calculate Spectral Indices
 # Band combinations guide (https://www.esri.com/arcgis-blog/products/product/imagery/band-combinations-for-landsat-8/)
-# turn off factors
+# Turn off factors
 options(stringsAsFactors = FALSE)
 
-# NDVI 
-# calculate NDVI using the red (band 3) and nir (band 4) bands  
-# NVDI = (NIR - Red) / (NIR + Red) 
-Spec_Master$NDVI <- (Spec_Master$B4 - Spec_Master$B3) / (Spec_Master$B4 + Spec_Master$B3)   
-# NBR 
-# using nir (band 4) and swir (band 7) *there is no band 6 so band 7 is in the 6th position
-# NBR = (NIR - SWIR) / (NIR + SWIR)
-Spec_Master$NBR <- (Spec_Master$B4 - Spec_Master$B7) / (Spec_Master$B4 + Spec_Master$B7)   
-# NBR 2 
-# using swir1 (band 5) and swir2 (band 7) *suposidly good for measuring recovery
-# NBR2 = (SWIR1 - SWIR2) / (SWIR1 + SWIR2)
-Spec_Master$NBR2 <- (Spec_Master$B5 - Spec_Master$B7) / (Spec_Master$B5 + Spec_Master$B7)  
+# Bind tiles together
+Spec_Master <- Specs %>%
+  purrr::list_rbind(x = .) %>%
+  # Calculate NDVI using the red (band 3) and nir (band 4) bands  
+  # NVDI = (NIR - Red) / (NIR + Red) 
+  dplyr::mutate(NDVI = (B4-B3)/(B4+B3),
+                # using nir (band 4) and swir (band 7) *there is no band 6 so band 7 is in the 6th position
+                # NBR = (NIR - SWIR) / (NIR + SWIR)
+                NBR = (B4-B7)/(B4+B7),
+                # using swir1 (band 5) and swir2 (band 7) *supposedly good for measuring recovery
+                # NBR2 = (SWIR1 - SWIR2) / (SWIR1 + SWIR2)
+                NBR2 = (B5-B7)/(B5+B7))
 
-# check it
+# Check it
 head(Spec_Master)
 
-# SAVE SPECTRAL MASTER DATAFRAME
-#setwd("/Volumes/inwedata/Malone Lab/ENP Fire/Grace_McLeod/Image_Processing/Master_Spec")
-write.csv(Spec_Master, file="Spec_Master.csv")
-save(Spec_Master, file="Spec_Master.RDATA")
+# Save spectral master dataframe
+save(Spec_Master, file = file.path(image_dir, "Master_Spec", "Spec_Master_updated.RDATA"))
 
-
-
-
-
-
-
-
-
+# Export as csv
+write.csv(Spec_Master, 
+          file = file.path(image_dir, "Master_Spec", "Spec_Master_updated.csv"), 
+          row.names = F)
 
