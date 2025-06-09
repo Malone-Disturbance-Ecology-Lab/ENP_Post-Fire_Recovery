@@ -437,7 +437,7 @@ Sub_pts_27_19 <- terra::crop(Smpl_pts_27_19, terra::ext(stack_27_19))
 chunks <- seq(1, length(Sub_pts_27_19), by = 10000)
 
 # For each chunk...
-for (i in 33:34){
+for (i in 1:length(chunks)){
   
   message("On part: ", i, " of ", length(chunks))
   
