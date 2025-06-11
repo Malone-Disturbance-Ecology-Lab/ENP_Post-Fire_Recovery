@@ -41,7 +41,7 @@ min_obs_date_list <- rep(NA_character_, length(Sev_df$ptID))
 min_nbr_list <- rep(NA_real_, length(Sev_df$ptID))
 
 # Start off cycling through points
-# Loop through points in Sev_df
+# Loop through points in Sev_df (about 2 hours to run)
 for (i in seq_along(Sev_df$ptID)){
   # Identify point ID
   pt <- Sev_df$ptID[i]
@@ -201,7 +201,12 @@ ggplot(aes(x = PreDateDif, y = PreNBR), data = Sev_df_v4) +
 
 # Calculate range between end-date and post-date ------------
 Sev_df_v5 <- Sev_df_v4 %>%
-  dplyr::mutate(PostDateDif = as.numeric(PostDate - EndDate))
+  dplyr::mutate(PostDateDif = as.numeric(PostDate - EndDate)) %>%
+  # Reorder columns
+  dplyr::select(ptID, StartDate, EndDate, FireYear,
+               PreNBR, PreNDVI, PostNBR,
+               PreDate, PostDate, DateDif,
+               Severity, PreDateDif, PostDateDif)
 
 summary(Sev_df_v5$PostDateDif)
 #    Min.   1st Qu.    Median    Mean   3rd Qu.    Max.    NA's 
@@ -212,13 +217,16 @@ no_end <- Sev_df_v5 %>%
   dplyr::filter(is.na(EndDate))
 # Sev_df_v5 <- Sev_df_v5 %>% drop_na(PostDateDif)
 # Almost all points have a post-fire obs within 100 days of fire. 
-length(unique(Sev_df_v5$ptID[Sev_df_v5$PostDateDif <= 41])) # 112,942
-length(unique(Sev_df_v5$ptID[Sev_df_v5$PostDateDif > 41])) # 36,886
+length(unique(Sev_df_v5$ptID[Sev_df_v5$PostDateDif <= 41])) # 91,785
+length(unique(Sev_df_v5$ptID[Sev_df_v5$PostDateDif > 41])) # 61,274
 # Reasonable to say you need post-fire value within one month or two satalite passes! 
 
+# Point to the path in the server where the data is
+dir <- file.path("/", "Volumes", "MaloneLab", "Research", "ENP", "ENP Fire", "Grace_McLeod")
+          
 # SAVE updates 
-write.csv(Sev_df_v5, file = "Severity_updated.csv")
-save(Sev_df_v5, file = "Sev_df_updated.RDATA")
+write.csv(Sev_df_v5, file = file.path(dir, "Severity", "Severity_updated.csv"), row.names = F)
+save(Sev_df_v5, file = file.path(dir, "Severity", "Sev_df_updated.RDATA"))
 
 
 
