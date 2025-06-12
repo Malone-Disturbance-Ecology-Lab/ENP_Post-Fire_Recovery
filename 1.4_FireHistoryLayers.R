@@ -57,7 +57,7 @@ summary(FireHistory_df$freq_2001_2007)
 FireHistory_df$freq_2010_2020 <- rowSums(FireHistory_df[ , c(34:44)])
 summary(FireHistory_df$freq_2010_2020)
 
-write.csv(FireHistory_df, "/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Fire_History/FireHistory_df.csv")
+write.csv(FireHistory_df, "/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Fire_History/FireHistory_df.csv", row.names = F)
 save(FireHistory_df, file="/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Fire_History/FireHistory_df.RDATA")
 
 
@@ -71,6 +71,6 @@ FireYears_df <- FireYears_df %>%
 summary(FireYears_df)
 
 
-write.csv(FireYears_df, "/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Fire_History/FireYears_df.csv")
+write.csv(FireYears_df, "/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Fire_History/FireYears_df.csv", row.names = F)
 save(FireYears_df, file="/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Fire_History/FireYears_df.RDATA")
 
