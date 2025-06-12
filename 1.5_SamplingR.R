@@ -35,7 +35,6 @@ Burned_pts_df <- FireHistory_df %>%
   # Remove points that never burned (1978-2020)
   dplyr::filter(freq_1978_2020 != 0)  %>% # 411,265 pts (2,859 unburned / 414,124 origninal = >99% have burned on reccord)
   # Rename columns
-  dplyr::rename(ptID = ID) %>%
   dplyr::rename(coords.x1 = x) %>% 
   dplyr::rename(coords.x2 = y)
 
