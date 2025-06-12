@@ -19,13 +19,13 @@ setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod")
 firehist_folder <- file.path("/", "Volumes", "malonelab", "Research", "ENP", "ENP Fire", "FireHistory")
 
 # Read in tidy annual burned/unburned rasters
-burned_rasters <- terra::rast(file.path(firehist_folder, "EVER_BICY_1978_2023_burned.tif")) %>% 
+burned_rasters <- terra::rast(file.path(firehist_folder, "EVER_BICY_1978_2023_burned.tif")) 
 
 # Read in tidy year of fire occurrence rasters
 year_rasters <- terra::rast(file.path(firehist_folder, "EVER_BICY_1978_2023_year_occurrence.tif"))
 
 # load upland sample pts
-Sample_pts_upland <- sf::st_read(dsn="./Sampling", layer="Sample_pts_upland")
+Sample_pts_upland <- sf::st_read(dsn="./Sampling", layer="Sample_pts_upland_052925")
 
 
 # FIRE FREQUENCY (for total fires)  ####
@@ -38,6 +38,9 @@ FireHistory <- terra::extract(burned_rasters, Sample_pts_upland, method= "simple
 FireHistory_df <- as.data.frame(FireHistory)
 # calculate total fires 
 FireHistory_df %>% names
+FireHistory_df <- FireHistory_df %>%
+  # rename ID column to ptID
+  dplyr::rename(ptID = ID)
 FireHistory_df[is.na(FireHistory_df)] <- 0 # turn NAs to 0
 
 # total fire history
@@ -62,6 +65,9 @@ save(FireHistory_df, file="/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod
 FireYears <- terra::extract(year_rasters, Sample_pts_upland, method= "simple", ID=TRUE,xy=TRUE )
 
 FireYears_df <- as.data.frame(FireYears)
+FireYears_df <- FireYears_df %>%
+  # rename ID column to ptID
+  dplyr::rename(ptID = ID)
 summary(FireYears_df)
 
 
