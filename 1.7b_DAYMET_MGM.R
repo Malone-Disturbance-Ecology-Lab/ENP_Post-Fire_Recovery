@@ -23,7 +23,7 @@ rm(list=ls())
 # Load necessary libraries
 # If you don't have the "librarian" package, uncomment the next line and run it to install the package
 # install.packages("librarian")
-librarian::shelf(tidyverse, sf, terra)
+librarian::shelf(tidyverse, terra)
 
 # Point to the seasonal conditions folder on server
 season_dir <- file.path("/", "Volumes", "MaloneLab", "Research", "ENP", "ENP Fire", "Grace_McLeod", "Seasonal_Cond") 
@@ -33,9 +33,9 @@ season_dir <- file.path("/", "Volumes", "MaloneLab", "Research", "ENP", "ENP Fir
 ## --------------------------------------------- ##
 
 # LoadEVG boundary for masking
-EVGbound <- sf::st_read(file.path("/", "Volumes", "MaloneLab", "Research", "ENP", "ENP Fire", "Grace_McLeod", "AOI", "EVG_bound.shp")) %>%
+EVGbound <- terra::vect(file.path("/", "Volumes", "MaloneLab", "Research", "ENP", "ENP Fire", "Grace_McLeod", "AOI", "EVG_bound.shp")) %>%
   # Change projection to match Daymet data
-  sf::st_transform("+proj=lcc +lat_1=25 +lat_2=60 +lat_0=42.5 +lon_0=-100 +x_0=0 +y_0=0 +ellps=WGS84 +units=km +no_defs")
+  terra::project("+proj=lcc +lat_1=25 +lat_2=60 +lat_0=42.5 +lon_0=-100 +x_0=0 +y_0=0 +ellps=WGS84 +units=km +no_defs")
 
 # Precipitation ------------------------------------
 
