@@ -18,7 +18,7 @@ rm(list=ls())
 # Load necessary libraries
 # If you don't have the "librarian" package, uncomment the next line and run it to install the package
 # install.packages("librarian")
-librarian::shelf(tidyverse, sf, terra)
+librarian::shelf(tidyverse, sf)
 
 # Point to the path in the server where the data is
 dir <- file.path("/", "Volumes", "MaloneLab", "Research", "ENP", "ENP Fire", "Grace_McLeod") 

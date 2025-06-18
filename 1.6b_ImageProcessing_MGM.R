@@ -18,7 +18,7 @@
 # Load necessary libraries
 # If you don't have the "librarian" package, uncomment the next line and run it to install the package
 # install.packages("librarian")
-librarian::shelf(sf, tidyverse, terra)
+librarian::shelf(tidyverse, terra)
 
 ## --------------------------------------------- ##
 #             Image Processing -----
