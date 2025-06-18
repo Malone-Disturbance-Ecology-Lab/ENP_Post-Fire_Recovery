@@ -444,9 +444,9 @@ for (i in 1:length(chunks)){
   # Amount to increment the index by
   increment <- 9999
   
-  # If we're on the last chunk, increment by 9830 instead
-  if (i == 34) {
-    increment <- 9830
+  # If we're on the last chunk, increment by 339831-330001=9830 instead
+  if (i == length(chunks)) {
+    increment <- length(Sub_pts_27_19)-chunks[i]
   }
   
   # Split into chunk
