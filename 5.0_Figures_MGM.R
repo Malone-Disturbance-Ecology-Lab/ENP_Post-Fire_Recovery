@@ -23,11 +23,9 @@ library(corrplot)
 library(ggcorrplot)
 
 rm(list=ls())
-setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript/Scripts_Clean/")
 
 # Spatial Data 
-load('/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript/Scripts_Clean/Spatial_files.RDATA')
-
+load('/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript/Spatial_files.RDATA')
 # Climate Data
 load('/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Climate/Annual_Climate_Summary_ENP.RDATA')
 #load("~/Documents/Thesis/RECOVERY/ENP_Post-Fire_Recovery/.RData")
@@ -195,9 +193,47 @@ map.pinelands_plot <- ggplot(map.pinelands) +
     text_cex = 2)
 
 
+map.pinelands_plot_new <- ggplot(map.pinelands) + 
+  geom_sf(data = FL_clip, fill = "lightgrey", color = "lightgrey") + 
+  geom_sf(data = EVG_bound, fill = NA, color = "black", size = 1.5) +    
+  geom_sf(aes(colour = L4_name, fill = L4_name), size = 5) +
+  theme_classic() +
+  scale_color_manual(values = c("black", "black")) +
+  scale_fill_manual(values = c("black", "black")) +
+  theme(text = element_text(size = 35),
+        legend.position = "none") +
+  labs(fill = "Ecosystem Type", color = NULL, x=NULL, y=NULL) +
+  guides(color = "none") +
+  scale_x_continuous(
+    breaks = seq(-81.5, -80, by = 0.5)) + 
+  scale_y_continuous(
+    breaks = seq(24, 27, by = 0.5))+ 
+  # park lables
+  #annotate("text", x = -80.6, y = 25.8, label = "Everglades National Park", size = 6.5, color = "black", fontface ="plain" ) +
+  # annotate("text", x = -81.1, y = 26.3, label = "Big Cypress National Preserve", size = 6.5, color = "black", fontface = "plain") + 
+  # FL inlay
+  annotation_custom( 
+    grob = ggplotGrob(inlay_plot), 
+    xmin = -81.6, xmax = -81.2, ymin = 24.8, ymax = 25.2) +
+  # north arrow 
+  annotation_north_arrow(
+    location = "tr", 
+    width = unit(1, "cm"), 
+    height = unit(1.5, "cm"),
+    style = north_arrow_orienteering()) +
+  # scale bar
+  annotation_scale(
+    location = "bl",
+    width_hint = 0.2, 
+    height = unit(0.4, "cm"), 
+    style = "ticks", 
+    bar_cols = c("black", "white"),
+    text_cex = 2)
+
+
 # Save
 setwd("Figures")
-ggsave("Map_Pinelands.png", plot = map.pinelands_plot, width = 12, height = 10, dpi = 300)
+ggsave("Map_Pinelands_06212025.png", plot = map.pinelands_plot_new, width = 12, height = 10, dpi = 300)
 
 
 ### FIGURE 2: Historical Conditions- Climate Normals and Fire History  #################################################################
@@ -313,13 +349,14 @@ ggsave("Historical_Conditions.png", plot = final.plot.HistCond, width = 18, heig
 
 
 
-### FIGURE 4: Baseline Model #############################################################################
+### FIGURE 3: Post-fire, Pre-fire, NDVI Enhanced #############################################################################
 
 # Panel comparing:
 # A: modeled vs observed NDVI
 # B: wet vs dry season model values
 # C: pre-fire vs post-fire vs baseline
 
+# Data Prep: #####
 load("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Baseline/NDVI_rf.RDATA")
 load("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Baseline/BL_train_test.RDATA")
 load("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Recovery/Recov_Combo2.RDATA")
@@ -366,7 +403,7 @@ Recovery.baseline.start$Month <- format( as.Date(Recovery.baseline.start$Obs_Dat
 Recovery.baseline.start.1 <- Recovery.baseline.start %>% filter(Month == "01")
 Recovery.baseline.start.6 <- Recovery.baseline.start %>% filter(Month == "06")
 
-# A: 
+# A:
 # Figure un-burned (Train) density broken up into quantiles and baseline density for initial values.
 train.predtions <- train
 # set values for baseline
@@ -379,7 +416,12 @@ train.predtions$SWIR1.SWIR2 <- 1.259455
 train.predtions$NIR.SWIR1 <- 1.429776
 train.predtions$model.NDVI <-predict(NDVI_rf, data =train.predtions )
 
-# A: Modeled VS Observed 
+save(train.predtions, time.diff.90.df, Recovery.baseline.start,Recovery.baseline.start.1,
+     Recovery.baseline.start.6, file = "/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Figure3_Data.RDATA")
+
+# A: Modeled VS Observed ####
+
+load(file = "/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Figure3_Data.RDATA" )
 train.NDVI.plot <- ggplot(data =train.predtions) + 
   geom_density(aes(x= NDVI, y = ..scaled..), color="black" , size=1.5) + 
   geom_density(aes(x= model.NDVI, y = ..scaled..),linetype = "dashed", color="#1e5b24", size=1.5 ) + 
@@ -412,7 +454,17 @@ recovery.density.plot <- ggplot(data =time.diff.90.df) +
   labs(y="Density", x="NDVI", tag="D") +
   annotate( geom="text", x= 0.1, y=1.13, label="Post-fire", size=5 , fontface = "bold", color="#a01202") +
   annotate( geom="text", x= 0.25, y=1.13, label="Pre-fire", size=5 , fontface = "bold", color="goldenrod") + 
-  annotate( geom="text", x= 0.37, y=0.6, label="Modeled", size=5 , fontface = "bold", color="#1e5b24", angle=-90) +
+  annotate( geom="text", x= 0.37, y=0.6, label="Enhanced", size=5 , fontface = "bold", color="#1e5b24", angle=-90) +
+  theme_bw() +
+  theme(text = element_text(size = 20))
+
+recovery.density.plot.new <- ggplot(data =time.diff.90.df) + 
+  geom_density(aes(x= NDVI, y = ..scaled..),fill="#a01202", alpha=0.2 ,linetype = "solid" , color="#a01202") + 
+  geom_density(aes(x= model.NDVI, y = ..scaled..), fill="#1e5b24", alpha=0.4,linetype = "dashed" , color="#1e5b24") + 
+  geom_density( data= Recov_Combo, aes( x= PreNDVI, y = ..scaled..), fill="goldenrod", alpha=0.2 ,linetype = "solid" , color="goldenrod") + 
+  annotate( geom="text", x= 0.1, y=1.13, label="Post-fire", size=5 , fontface = "bold", color="#a01202") +
+  annotate( geom="text", x= 0.25, y=1.13, label="Pre-fire", size=5 , fontface = "bold", color="goldenrod") + 
+  annotate( geom="text", x= 0.37, y=0.6, label="Enhanced", size=5 , fontface = "bold", color="#1e5b24", angle=-90) +
   theme_bw() +
   theme(text = element_text(size = 20))
 
@@ -483,6 +535,7 @@ baseline_plot <- ggarrange(map_bl,
 
 # Save
 ggsave("baseline_plot.png", plot = baseline_plot, width = 12, height = 8, dpi = 300)
+ggsave("Figure3_NDVI-pre-post-enhanced.png", plot = recovery.density.plot.new, width = 6, height = 4, dpi = 300)
 
 
 ### FIGURE 5: Recovery #################################################################
@@ -571,9 +624,9 @@ plot_recovery_densityNDVI <- ggplot(data = thresholds) +
         text = element_text(size = 20),
         panel.grid.major.y = element_blank(),  
         panel.grid.minor.y = element_blank()) + 
-  labs(x = "NDVI", y = "Density", fill="Threshold", tag="D") +
+  labs(x = "NDVI", y = "Density", fill="Threshold", tag="C") +
   geom_vline(xintercept = mean(thresholds$PreNDVI), color="goldenrod", linetype="dashed", size=1.2) +
-  annotate(geom="text", x= 0.28, y=-1.3, label="Pre-Fire NDVI", size=8 , color="goldenrod") 
+  annotate(geom="text", x= 0.15, y=30, label="Pre-Fire NDVI", size=6 , color="goldenrod") 
 
 
 # Combined Recovery Plots
@@ -583,6 +636,11 @@ plot_recovery.1 <- ggarrange(plot_recovery_rate,
                              #labels=c("B", "C"),
                              font.label = list(size = 20))
 plot_recovery.2 <- ggarrange(plot_recovery.1,
+                             plot_recovery_densityNDVI, 
+                             nrow=2, ncol=1,
+                             font.label = list(size = 20))
+
+plot_recovery.3 <- ggarrange(plot_recovery_rate,
                              plot_recovery_densityNDVI, 
                              nrow=2, ncol=1,
                              font.label = list(size = 20))
@@ -657,10 +715,11 @@ map_recovery_MapMaxThresh <- hex_aggregated %>%
 plot_recovery_final <- ggarrange(map_recovery_MapMaxThresh,
                                  plot_recovery.2,
                                  nrow = 1, ncol=2)
+
 # save
 # getwd()
-ggsave("Recovery_thresholds.png", plot = plot_recovery_final, width = 18, height = 8, dpi = 300)
-
+ggsave("Recovery_thresholds_part1.png", plot = map_recovery_MapMaxThresh, width = 5, height = 6, dpi = 300)
+ggsave("Recovery_thresholds_part2.png", plot = plot_recovery.3, width = 5, height = 6, dpi = 300)
 
 ### FIGURE 6: Drivers of Enhancement (>T80) #################################################################
 # Recivery Threshold Index (T80_rf_index) 
@@ -809,14 +868,14 @@ plot_T80_drivers <- ggarrange(
   plot.T80_rf_index.pdsi.min,  
   #plot.T80_rf_index.pdsi.sd, 
   #plot.T80_rf_index.pdsi.mean,
-  nrow=3, ncol=1, labels= c( "A","B", "C"),common.legend = TRUE)
-#nrow=4, ncol=2, labels= c( "A","B", "C", "D", "E","F", "G", "H"),common.legend = TRUE)
+  nrow=3, ncol=1, labels= c( "A","B", "C"),common.legend = TRUE,
+  font.label = list(size = 16))
 
 
 # save
 setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript/Figures")
 #ggsave("Drivers_T80_pannel.png", plot = plot_T80_drivers, width = 10, height = 14, dpi = 300)
-ggsave("Drivers_T80_pannel.png", plot = plot_T80_drivers, width = 8, height = 14, dpi = 300)
+ggsave("Drivers_T80_pannel.png", plot = plot_T80_drivers, width = 5, height = 10, dpi = 300)
 
 ### FIGURE 7: Drivers of Recovery Time #############################################################################################################
 
