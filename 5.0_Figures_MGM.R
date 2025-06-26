@@ -793,8 +793,9 @@ plot.T80_rf_index.pdsi.max <-sensitivity.df %>% filter(target.var == 'pdsi.max')
     legend.position = "none") + 
   guides(color = "none")
 
+
 plot.T80_rf_index.pdsi.min <-sensitivity.df %>% filter(target.var == 'pdsi.min') %>%  
-  ggplot( aes(x = pdsi.min, y = level, fill = T80_rf_index)) + 
+  ggplot( aes(x = pdsi.min, y = level, fill = T80_rf_index), alpha=0.5) + 
   geom_density_ridges_gradient() +  
   theme_bw()+
   scale_color_manual(
@@ -967,7 +968,7 @@ plot_pdsi <- ggarrange(
   font.label = list(size = 20))
 
 
-setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript/Figures")
+#setwd("/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Manuscript/Figures")
 ggsave("Drivers_RecTime.png", plot = plot_pdsi, width = 12, height = 10, dpi = 300)
 
 

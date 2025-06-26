@@ -258,7 +258,7 @@ sensitivity_plot_NDVI <- function( df, VOI, label) {
 }
 
 p.1 <- sensitivity_plot_NDVI( df=totalfires.summary , VOI = totalfires.summary$TotalFires , label='Total Fires')
-p.2 <- sensitivity_plot_NDVI( df=Prev.Int.summary , VOI = Prev.Int.summary$Prev.Int , label='Previous Fire Interval')
+p.2 <- sensitivity_plot_NDVI( df=Prev.Int.summary , VOI = Prev.Int.summary$Prev.Int , label='Time Since Fire')
 p.3 <- sensitivity_plot_NDVI( df=SWIR1.SWIR2.summary , VOI = SWIR1.SWIR2.summary$SWIR1.SWIR2 , label='SWIR1:SWIR2')
 p.4 <- sensitivity_plot_NDVI( df=Obs_month.summary , VOI = Obs_month.summary$Obs_month , label='Month')
 p.5 <- sensitivity_plot_NDVI( df=Pt.B4max.summary , VOI = Pt.B4max.summary$Pt.B4max , label='Maximum Band 4')
@@ -276,7 +276,7 @@ one2one <- ggplot(data = data_name)  + geom_point(aes( x= NDVI, y = predicted)) 
   ylab('Predicted') + xlab('Observed') +theme(text = element_text(size = 8)) + 
   geom_abline(intercept = 0, slope = 1, col="red", linetype="dashed")
 
-setwd('/Users/sm3466/YSE Dropbox/Sparkle Malone/Research/ENP_Post-Fire_Recovery')
+setwd('/Users/sm3466/YSE Dropbox/Sparkle Malone/Research/ENP_Post-Fire_Recovery/Figures')
 png(filename="Baseline_Sensitivity.png",
     width = 2000, height=1400, res=400)
 ggarrange( one2one, p.1, p.2, p.4,
