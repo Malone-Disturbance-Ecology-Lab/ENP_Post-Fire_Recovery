@@ -1309,6 +1309,53 @@ map.pdsi <- hex_aggregated %>%
 
 ggsave("SUP.map.PDSI.png", plot = map.pdsi, width = 12, height = 10, dpi = 300)
 
+# BASELINE SENSITIVITY PLOT:  ####
+
+load(file = "/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Baseline_Sensitivity.Rdata" )
+
+# plot 
+
+sensitivity_plot_NDVI <- function( df, VOI, label) {
+  
+  ggplot(data = df)  + 
+    geom_smooth(aes( x= VOI, y = NDVI.model), col='black') + theme_bw() +
+    ylab('NDVI') + xlab(label) +theme(text = element_text(size = 8))
+}
+
+p.1 <- sensitivity_plot_NDVI( df=totalfires.summary , VOI = totalfires.summary$TotalFires , label='Total Fires')
+p.2 <- sensitivity_plot_NDVI( df=Prev.Int.summary , VOI = Prev.Int.summary$Prev.Int , label='Time Since Fire')
+p.3 <- sensitivity_plot_NDVI( df=SWIR1.SWIR2.summary , VOI = SWIR1.SWIR2.summary$SWIR1.SWIR2 , label='SWIR1:SWIR2')
+p.4 <- sensitivity_plot_NDVI( df=Obs_month.summary , VOI = Obs_month.summary$Obs_month , label='Month')
+p.5 <- sensitivity_plot_NDVI( df=Pt.B4max.summary , VOI = Pt.B4max.summary$Pt.B4max , label='Maximum Band 4')
+p.6 <- sensitivity_plot_NDVI( df=Pt.B4min.summary , VOI = Pt.B4min.summary$Pt.B4min , label='Minimum Band 4')
+p.7 <- sensitivity_plot_NDVI( df=Pt.B5max.summary , VOI = Pt.B5max.summary$Pt.B5max , label='Maximum Band 5')
+p.8 <- sensitivity_plot_NDVI( df=NIR.SWIR1.summary , VOI = NIR.SWIR1.summary$NIR.SWIR1 , label='NIR.SWIR1')
+p.9 <- sensitivity_plot_NDVI( df=tmax.summary , VOI = tmax.summary$tmax , label='Maximum Air Temperature')
+p.10 <- sensitivity_plot_NDVI( df=precip.summary , VOI = precip.summary$precip , label='Precipitation')
+
+
+# One to One plot
+
+one2one <- ggplot(data = data_name)  + geom_point(aes( x= NDVI, y = predicted)) +
+  geom_smooth(aes( x= NDVI, y = predicted), method= "lm",col="goldenrod") + theme_bw() +
+  ylab('Predicted') + xlab('Observed') +theme(text = element_text(size = 8)) + 
+  geom_abline(intercept = 0, slope = 1, col="red", linetype="dashed")
+
+setwd('/Users/sm3466/YSE Dropbox/Sparkle Malone/Research/ENP_Post-Fire_Recovery/Figures')
+png(filename="Baseline_Sensitivity.png",
+    width = 2000, height=1400, res=400)
+ggarrange( one2one, p.1, p.2, p.4,
+           p.3, p.6, p.8, 
+           p.9, p.10, 
+           ncol=3, nrow=3, 
+           labels =c("A", "B", "C", "D", "E",
+                     "F", "G", "H", "I"),
+           font.label=list(color="black",size=10))
+
+dev.off()
+
+
+
 
 
 

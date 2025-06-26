@@ -247,6 +247,11 @@ Pt.B5max.summary <- sensitivity_var.df(rf.model = NDVI_rf, var.name =  'Pt.B5max
 tmax.summary <- sensitivity_var.df(rf.model = NDVI_rf, var.name =  'tmax')
 precip.summary <- sensitivity_var.df(rf.model = NDVI_rf, var.name =  'precip')
 
+# Save baseline summaries:
+
+save(totalfires.summary ,Prev.Int.summary ,  SWIR1.SWIR2.summary,
+     Obs_month.summary,Pt.B4max.summary, Pt.B4min.summary,
+     NIR.SWIR1.summary, Pt.B5max.summary,tmax.summary,precip.summary, file = "/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Baseline_Sensitivity.Rdata" )
 
 # plot 
 
