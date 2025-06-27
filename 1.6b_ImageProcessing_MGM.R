@@ -538,7 +538,7 @@ Ext_27_19_together <- as.list(list.files(parts, pattern = "Ext_27_19_df_", full.
 
 # Combine files into a dataframe
 Ext_27_19_together_df <- Ext_27_19_together %>%
-  purrr::map(.f = read.csv) %>%
+  purrr::map(.f = read_csv) %>%
   purrr::map_dfr(.f = select, everything())
 
 # Identify all Spec_27_19_clean_ files
@@ -546,7 +546,7 @@ Spec_27_19_clean_together <- as.list(list.files(parts, pattern = "Spec_27_19_cle
 
 # Combine files into a dataframe
 Spec_27_19_clean_together_df <- Spec_27_19_clean_together %>%
-  purrr::map(.f = read.csv) %>%
+  purrr::map(.f = read_csv) %>%
   purrr::map_dfr(.f = select, everything())
 
 # Save  
