@@ -72,5 +72,6 @@ summary(FireYears_df)
 
 
 write.csv(FireYears_df, "/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Fire_History/FireYears_df.csv", row.names = F)
+
 save(FireYears_df, file="/Volumes/MaloneLab/Research/ENP/ENP Fire/Grace_McLeod/Fire_History/FireYears_df.RDATA")
 
